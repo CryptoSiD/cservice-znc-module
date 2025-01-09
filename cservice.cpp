@@ -193,7 +193,7 @@ public:
             }
         }
 
-        GetNetwork()->SetIRCNick(sServerPassword);
+        GetNetwork()->SetServerPassword(sServerPassword);
         PutModule("Server password set for login with 2FA " + CString(m_bUse2FA ? "enabled" : "disabled") + ".");
     }
 };
