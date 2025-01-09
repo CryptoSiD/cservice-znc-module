@@ -1,8 +1,8 @@
 #include <znc/Modules.h>
 #include <znc/IRCNetwork.h>
 #include <znc/User.h>
-#include <znc/IRCSock.h>
 #include <znc/Server.h>
+#include <znc/IRCSock.h> // Include CIRCSock definition
 #include <openssl/hmac.h>
 #include <sstream>
 #include <iomanip>
@@ -178,33 +178,28 @@ public:
     }
 
     EModRet OnIRCConnecting(CIRCSock* pIRCSock) override {
-    if (!m_bEnableLoC) {
-        PutModule("LoC is disabled. Skipping login.");
-        return CONTINUE;
-    }
-
-    CString sUsername = GetNV("username");
-    CString sPassword = GetNV("password");
-    CString sServerPassword = sUsername + " " + sPassword;
-
-    if (m_bUse2FA) {
-        CString sSecretKey = GetNV("secret");
-        if (!sSecretKey.empty()) {
-            CString sTOTP = GenerateTOTP(sSecretKey);
-            PutModule("Debug: Generated TOTP is: " + sTOTP);
-            sServerPassword += " " + sTOTP;
-        } else {
-            PutModule("Error: 2FA is enabled, but no secret key is set.");
+        if (!m_bEnableLoC) {
+            PutModule("LoC is disabled. Skipping login.");
             return CONTINUE;
         }
+
+        CString sUsername = GetNV("username");
+        CString sPassword = GetNV("password");
+        CString sServerPassword = "-x! " + sUsername + " " + sPassword;
+
+        if (m_bUse2FA) {
+            CString sSecretKey = GetNV("secret");
+            if (!sSecretKey.empty()) {
+                CString sTOTP = GenerateTOTP(sSecretKey);
+                sServerPassword += " " + sTOTP;
+            }
+        }
+
+        pIRCSock->SetPass(sServerPassword);
+        PutModule("Server password set for login with 2FA " + CString(m_bUse2FA ? "enabled" : "disabled") + ".");
+
+        return CONTINUE;
     }
-
-    PutModule("Debug: Full server password being set: " + sServerPassword);
-    pIRCSock->SetPass(sServerPassword);
-    PutModule("Server password set for login with 2FA " + CString(m_bUse2FA ? "enabled" : "disabled") + ".");
-
-    return CONTINUE;
-}
 };
 
 template<> void TModInfo<CService>(CModInfo& Info) {
