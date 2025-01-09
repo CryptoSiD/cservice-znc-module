@@ -14,19 +14,25 @@ private:
     bool m_bUse2FA;          // Whether 2FA is enabled
     bool m_bEnableLoC;       // Whether LoC is enabled
     CString m_sSecretKey;    // The 2FA secret key
+    CString m_sUserMode;     // User mode prefix (-x!, +x!, etc.)
 
 public:
     MODCONSTRUCTOR(CService) {
         m_bUse2FA = false;
         m_bEnableLoC = true; // Default to true
+        m_sUserMode = "-x!"; // Default user mode
     }
 
     bool OnLoad(const CString& sArgs, CString& sMessage) override {
-        // Load the saved 2FA and LoC settings from NV storage
+        // Load the saved 2FA, LoC, and user mode settings from NV storage
         CString sUse2FA = GetNV("use2fa");
         m_bUse2FA = sUse2FA.Equals("true");
         CString sEnableLoC = GetNV("enableloc");
         m_bEnableLoC = sEnableLoC.Equals("true");
+        CString sUserMode = GetNV("usermode");
+        if (!sUserMode.empty()) {
+            m_sUserMode = sUserMode;
+        }
         return true; // Indicate successful loading
     }
 
@@ -50,6 +56,8 @@ public:
             EnableLoC();
         } else if (sAction == "disableloc") {
             DisableLoC();
+        } else if (sAction == "setusermode") {
+            SetUserMode(sCommand);
         }
     }
 
@@ -62,6 +70,7 @@ public:
         sHelpText += "disable2fa - Disable 2FA authentication.\n";
         sHelpText += "enableloc - Enable LoC authentication.\n";
         sHelpText += "disableloc - Disable LoC authentication.\n";
+        sHelpText += "setusermode <mode> - Set the user mode prefix (-x!, +x!, -!+x).\n";
         sHelpText += "showconfig - Show the current configuration settings.\n";
         sHelpText += "help - Show this help message.\n";
         PutModule(sHelpText);
@@ -74,6 +83,7 @@ public:
         sConfigText += "2FA Secret: " + CString(GetNV("secret").empty() ? "Not Set" : "Set (hidden for security)") + "\n";
         sConfigText += "2FA Enabled: " + CString(m_bUse2FA ? "Yes" : "No") + "\n";
         sConfigText += "LoC Enabled: " + CString(m_bEnableLoC ? "Yes" : "No") + "\n";
+        sConfigText += "User Mode: " + m_sUserMode + "\n";
         PutModule(sConfigText);
     }
 
@@ -114,6 +124,17 @@ public:
         m_bEnableLoC = false;
         SetNV("enableloc", "false");
         PutModule("LoC is now disabled.");
+    }
+
+    void SetUserMode(const CString& sCommand) {
+        CString sMode = sCommand.Token(1, true);
+        if (sMode == "-x!" || sMode == "+x!" || sMode == "-!+x") {
+            m_sUserMode = sMode;
+            SetNV("usermode", m_sUserMode);
+            PutModule("User mode set to: " + m_sUserMode);
+        } else {
+            PutModule("Error: Invalid user mode. Allowed values are: -x!, +x!, -!+x.");
+        }
     }
 
     CString GenerateTOTP(const CString& sSecretKey) {
@@ -185,7 +206,7 @@ public:
 
         CString sUsername = GetNV("username");
         CString sPassword = GetNV("password");
-        CString sServerPassword = "-x! " + sUsername + " " + sPassword;
+        CString sServerPassword = m_sUserMode + " " + sUsername + " " + sPassword;
 
         if (m_bUse2FA) {
             CString sSecretKey = GetNV("secret");
