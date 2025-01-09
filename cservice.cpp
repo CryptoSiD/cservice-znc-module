@@ -23,7 +23,7 @@ public:
         // Load the saved 2FA setting from NV storage
         CString sUse2FA = GetNV("use2fa");
         m_bUse2FA = sUse2FA.Equals("true");
-        PutModule("2FA setting loaded: " + CString(m_bUse2FA ? "Enabled" : "Disabled"));
+//        PutModule("2FA setting loaded: " + CString(m_bUse2FA ? "Enabled" : "Disabled"));
         return true; // Indicate successful loading
     }
 
