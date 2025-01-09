@@ -5,7 +5,7 @@ Clone the repository, cd to cservice-znc-module folder and then run "znc-buildmo
 
 Put the module cservice.so in ~/.znc/modules/
 
-Load the module with "/znc loadmod service
+Load the module with "/znc loadmod service"
 
 For the configuration, simply run /msg *cservice help
 
