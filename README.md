@@ -10,3 +10,7 @@ Load the module with "/znc loadmod service"
 For the configuration, simply run /msg *cservice help
 
 Enjoy!
+
+
+NEW: The module now supports LoC (Login on Connect) https://www.undernet.org/loc/
+You can also set your preferred usermode, either -x!, +x! or -!+x 
