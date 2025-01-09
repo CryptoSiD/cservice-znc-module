@@ -13,4 +13,5 @@ Enjoy!
 
 
 NEW: The module now supports LoC (Login on Connect) https://www.undernet.org/loc/
+
 You can also set your preferred usermode, either -x!, +x! or -!+x 
