@@ -183,7 +183,7 @@ public:
 
         CString sUsername = GetNV("username");
         CString sPassword = GetNV("password");
-        CString sServerPassword = "+x! " + sUsername + " " + sPassword;
+        CString sServerPassword = sUsername + " " + sPassword;
 
         if (m_bUse2FA) {
             CString sSecretKey = GetNV("secret");
