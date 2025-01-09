@@ -10,20 +10,21 @@
 class CService : public CModule {
 private:
     bool m_bUse2FA;          // Whether 2FA is enabled
+    bool m_bEnableLoC;       // Whether LoC is enabled
     CString m_sSecretKey;    // The 2FA secret key
-    bool m_bLoggedIn;        // Whether the user is logged in
 
 public:
     MODCONSTRUCTOR(CService) {
         m_bUse2FA = false;
-        m_bLoggedIn = false;
+        m_bEnableLoC = true; // Default to true
     }
 
     bool OnLoad(const CString& sArgs, CString& sMessage) override {
-        // Load the saved 2FA setting from NV storage
+        // Load the saved 2FA and LoC settings from NV storage
         CString sUse2FA = GetNV("use2fa");
         m_bUse2FA = sUse2FA.Equals("true");
-//        PutModule("2FA setting loaded: " + CString(m_bUse2FA ? "Enabled" : "Disabled"));
+        CString sEnableLoC = GetNV("enableloc");
+        m_bEnableLoC = sEnableLoC.Equals("true");
         return true; // Indicate successful loading
     }
 
@@ -43,6 +44,10 @@ public:
             Enable2FA();
         } else if (sAction == "disable2fa") {
             Disable2FA();
+        } else if (sAction == "enableloc") {
+            EnableLoC();
+        } else if (sAction == "disableloc") {
+            DisableLoC();
         }
     }
 
@@ -53,6 +58,8 @@ public:
         sHelpText += "setsecret <secret> - Set your 2FA secret key.\n";
         sHelpText += "enable2fa - Enable 2FA authentication.\n";
         sHelpText += "disable2fa - Disable 2FA authentication.\n";
+        sHelpText += "enableloc - Enable LoC authentication.\n";
+        sHelpText += "disableloc - Disable LoC authentication.\n";
         sHelpText += "showconfig - Show the current configuration settings.\n";
         sHelpText += "help - Show this help message.\n";
         PutModule(sHelpText);
@@ -64,6 +71,7 @@ public:
         sConfigText += "Password: " + CString(GetNV("password").empty() ? "Not Set" : "Set (hidden for security)") + "\n";
         sConfigText += "2FA Secret: " + CString(GetNV("secret").empty() ? "Not Set" : "Set (hidden for security)") + "\n";
         sConfigText += "2FA Enabled: " + CString(m_bUse2FA ? "Yes" : "No") + "\n";
+        sConfigText += "LoC Enabled: " + CString(m_bEnableLoC ? "Yes" : "No") + "\n";
         PutModule(sConfigText);
     }
 
@@ -94,18 +102,16 @@ public:
         PutModule("2FA is now disabled.");
     }
 
-    void AttemptLogin() {
-        CString sUsername = GetNV("username");
-        CString sPassword = GetNV("password");
-        CString sSecretKey = GetNV("secret");
+    void EnableLoC() {
+        m_bEnableLoC = true;
+        SetNV("enableloc", "true");
+        PutModule("LoC is now enabled.");
+    }
 
-        if (m_bUse2FA && !sSecretKey.empty()) {
-            CString sTOTP = GenerateTOTP(sSecretKey);
-            GetNetwork()->PutIRC("PRIVMSG X@channels.undernet.org :LOGIN " + sUsername + " " + sPassword + " " + sTOTP);
-        } else {
-            GetNetwork()->PutIRC("PRIVMSG X@channels.undernet.org :LOGIN " + sUsername + " " + sPassword);
-        }
-        m_bLoggedIn = true;
+    void DisableLoC() {
+        m_bEnableLoC = false;
+        SetNV("enableloc", "false");
+        PutModule("LoC is now disabled.");
     }
 
     CString GenerateTOTP(const CString& sSecretKey) {
@@ -170,8 +176,25 @@ public:
     }
 
     void OnIRCConnected() override {
-        m_bLoggedIn = false;
-        AttemptLogin();
+        if (!m_bEnableLoC) {
+            PutModule("LoC is disabled. Skipping login.");
+            return;
+        }
+
+        CString sUsername = GetNV("username");
+        CString sPassword = GetNV("password");
+        CString sServerPassword = "+x! " + sUsername + " " + sPassword;
+
+        if (m_bUse2FA) {
+            CString sSecretKey = GetNV("secret");
+            if (!sSecretKey.empty()) {
+                CString sTOTP = GenerateTOTP(sSecretKey);
+                sServerPassword += " " + sTOTP;
+            }
+        }
+
+        GetNetwork()->SetIRCNick(sServerPassword);
+        PutModule("Server password set for login with 2FA " + CString(m_bUse2FA ? "enabled" : "disabled") + ".");
     }
 };
 
