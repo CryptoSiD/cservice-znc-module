@@ -1,7 +1,8 @@
 #include <znc/Modules.h>
 #include <znc/IRCNetwork.h>
 #include <znc/User.h>
-#include <znc/Server.h> // Include CServer definition
+#include <znc/IRCSock.h>
+#include <znc/Server.h>
 #include <openssl/hmac.h>
 #include <sstream>
 #include <iomanip>
