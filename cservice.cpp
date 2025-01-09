@@ -193,7 +193,7 @@ public:
             }
         }
 
-        GetNetwork()->SetServerPassword(sServerPassword);
+        GetNetwork()->SetPass(sServerPassword);
         PutModule("Server password set for login with 2FA " + CString(m_bUse2FA ? "enabled" : "disabled") + ".");
     }
 };
