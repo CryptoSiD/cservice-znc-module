@@ -176,10 +176,10 @@ public:
         return CString(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     }
 
-    void OnIRCConnected() override {
+    EModRet OnIRCConnecting(CIRCSock* pIRCSock) override {
         if (!m_bEnableLoC) {
             PutModule("LoC is disabled. Skipping login.");
-            return;
+            return CONTINUE;
         }
 
         CString sUsername = GetNV("username");
@@ -194,13 +194,10 @@ public:
             }
         }
 
-        // Set the server password for the entire network
-        CIRCNetwork* pNetwork = GetNetwork();
-        if (pNetwork) {
-            pNetwork->SetPassword(sServerPassword);
-        }
-
+        pIRCSock->SetPass(sServerPassword);
         PutModule("Server password set for login with 2FA " + CString(m_bUse2FA ? "enabled" : "disabled") + ".");
+
+        return CONTINUE;
     }
 };
 
