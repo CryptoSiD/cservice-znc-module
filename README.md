@@ -1,4 +1,4 @@
-# cservice-znc-module
+# cservice znc module
 cservice ZNC module to log in to X on UnderNet. With 2FA/TOTP support.
 
 Clone the repository, cd to cservice-znc-module folder and then run "znc-buildmod cservice.cpp"
