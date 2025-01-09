@@ -194,14 +194,10 @@ public:
             }
         }
 
-        // Use SetIRCConnectEnabled(false) and manually configure the server password
+        // Set the server password for the entire network
         CIRCNetwork* pNetwork = GetNetwork();
         if (pNetwork) {
-            pNetwork->SetIRCConnectEnabled(false);
-            for (CServer* pServer : pNetwork->GetServers()) {
-                pServer->SetPass(sServerPassword);
-            }
-            pNetwork->SetIRCConnectEnabled(true);
+            pNetwork->SetPassword(sServerPassword);
         }
 
         PutModule("Server password set for login with 2FA " + CString(m_bUse2FA ? "enabled" : "disabled") + ".");
