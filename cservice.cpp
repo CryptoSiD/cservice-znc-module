@@ -2,7 +2,7 @@
 #include <znc/IRCNetwork.h>
 #include <znc/User.h>
 #include <znc/Server.h>
-#include <znc/IRCSock.h> // Include CIRCSock definition
+#include <znc/IRCSock.h>
 #include <openssl/hmac.h>
 #include <sstream>
 #include <iomanip>
@@ -11,16 +11,16 @@
 
 class CService : public CModule {
 private:
-    bool m_bUse2FA;          // Whether 2FA/TOTP is enabled
-    CString m_sSecretKey;    // The 2FA secret key
-    CString m_sUserMode;     // User mode prefix (-x!, +x!, etc.)
+    bool m_bUse2FA;
+    CString m_sSecretKey;
+    CString m_sUserMode;
 
 public:
     MODCONSTRUCTOR(CService) {
         m_bUse2FA = false;
-        m_sUserMode = "+x!"; // Default user mode
+        m_sUserMode = "+x!";
 
-        AddHelpCommand(); // Add help command automatically
+        AddHelpCommand();
 
         AddCommand("setusername", t_d("<username>"), t_d("Set your UnderNet username"), [=](const CString& sLine) {
             SetUsername(sLine);
@@ -37,7 +37,7 @@ public:
         AddCommand("disable2fa", t_d(""), t_d("Disable 2FA/TOTP authentication"), [=](const CString&) {
             Disable2FA();
         });
-        AddCommand("setusermode", t_d("<mode>"), t_d("Define the user mode prefix (-x!, +x!, -!+x) used by LoC during server connection.\n\nExplanation:\n- !: Do not connect to the server if LoC fails (e.g., X is split from the network).\n- x: Set usermode +x to hide client hostname."), [=](const CString& sLine) {
+        AddCommand("setusermode", t_d("<mode>"), t_d("Define the user mode prefix (-x!, +x!, -!+x) used by LoC during server connection."), [=](const CString& sLine) {
             SetUserMode(sLine);
         });
         AddCommand("showconfig", t_d(""), t_d("Show the current configuration settings"), [=](const CString&) {
@@ -46,14 +46,13 @@ public:
     }
 
     bool OnLoad(const CString& sArgs, CString& sMessage) override {
-        // Load the saved 2FA and user mode settings from NV storage
         CString sUse2FA = GetNV("use2fa");
         m_bUse2FA = sUse2FA.ToBool();
         CString sUserMode = GetNV("usermode");
         if (!sUserMode.empty()) {
             m_sUserMode = sUserMode;
         }
-        return true; // Indicate successful loading
+        return true;
     }
 
     void ShowConfig() {
@@ -107,7 +106,6 @@ public:
         }
     }
 
-    // Generate a Time-Based One-Time Password (TOTP) based on the secret key
     CString GenerateTOTP(const CString& sSecretKey) {
         CString sDecodedSecret = DecodeBase32(sSecretKey);
         uint64_t timeStep = std::time(nullptr) / 30;
@@ -169,7 +167,6 @@ public:
         return CString(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     }
 
-    // Automatically handles IRC connection setup with LoC and TOTP if enabled
     EModRet OnIRCConnecting(CIRCSock* pIRCSock) override {
         CString sUsername = GetNV("username");
         CString sPassword = GetNV("password");
@@ -183,14 +180,12 @@ public:
             }
         }
 
-        // Send server password with optional TOTP and user mode
         pIRCSock->SetPass(sServerPassword);
         return CONTINUE;
     }
 };
 
 template<> void TModInfo<CService>(CModInfo& Info) {
-    // No wiki page reference
 }
 
 NETWORKMODULEDEFS(CService, "Logs in to X on UnderNet with TOTP (2FA) and LoC support")
