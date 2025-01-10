@@ -11,15 +11,13 @@
 
 class CService : public CModule {
 private:
-    bool m_bUse2FA;          // Whether 2FA is enabled
-    bool m_bEnableLoC;       // Whether LoC is enabled
+    bool m_bUse2FA;          // Whether 2FA/TOTP is enabled
     CString m_sSecretKey;    // The 2FA secret key
     CString m_sUserMode;     // User mode prefix (-x!, +x!, etc.)
 
 public:
     MODCONSTRUCTOR(CService) {
         m_bUse2FA = false;
-        m_bEnableLoC = true; // Default to true
         m_sUserMode = ""; // Default user mode
 
         AddHelpCommand(); // Add help command automatically
@@ -30,22 +28,20 @@ public:
         AddCommand("setpassword", t_d("<password>"), t_d("Set your UnderNet password"), [=](const CString& sLine) {
             SetPassword(sLine);
         });
-        AddCommand("setsecret", t_d("<secret>"), t_d("Set your 2FA secret key"), [=](const CString& sLine) {
+        AddCommand("setsecret", t_d("<secret>"), t_d("Set your 2FA/TOTP secret key"), [=](const CString& sLine) {
             SetSecret(sLine);
         });
-        AddCommand("enable2fa", t_d(""), t_d("Enable 2FA authentication"), [=](const CString&) {
+        AddCommand("enable2fa", t_d(""), t_d("Enable 2FA/TOTP authentication"), [=](const CString&) {
             Enable2FA();
         });
-        AddCommand("disable2fa", t_d(""), t_d("Disable 2FA authentication"), [=](const CString&) {
+        AddCommand("disable2fa", t_d(""), t_d("Disable 2FA/TOTP authentication"), [=](const CString&) {
             Disable2FA();
         });
-        AddCommand("enableloc", t_d(""), t_d("Enable LoC authentication"), [=](const CString&) {
-            EnableLoC();
-        });
-        AddCommand("disableloc", t_d(""), t_d("Disable LoC authentication"), [=](const CString&) {
-            DisableLoC();
-        });
-        AddCommand("setusermode", t_d("<mode>"), t_d("Set the user mode prefix (-x!, +x!, -!+x)"), [=](const CString& sLine) {
+        AddCommand("setusermode", t_d("<mode>"), t_d("Define the user mode prefix (-x!, +x!, -!+x) used by LoC during server connection.
+
+Explanation:
+- !: Do not connect to the server if LoC fails (e.g., X is split from the network).
+- x: Set usermode +x to hide client hostname."), [=](const CString& sLine) {
             SetUserMode(sLine);
         });
         AddCommand("showconfig", t_d(""), t_d("Show the current configuration settings"), [=](const CString&) {
@@ -54,11 +50,9 @@ public:
     }
 
     bool OnLoad(const CString& sArgs, CString& sMessage) override {
-        // Load the saved 2FA, LoC, and user mode settings from NV storage
+        // Load the saved 2FA and user mode settings from NV storage
         CString sUse2FA = GetNV("use2fa");
         m_bUse2FA = sUse2FA.ToBool();
-        CString sEnableLoC = GetNV("enableloc");
-        m_bEnableLoC = sEnableLoC.ToBool();
         CString sUserMode = GetNV("usermode");
         if (!sUserMode.empty()) {
             m_sUserMode = sUserMode;
@@ -72,7 +66,6 @@ public:
         sConfigText += "Password: " + CString(GetNV("password").empty() ? "Not Set" : "Set (hidden for security)") + "\n";
         sConfigText += "2FA Secret: " + CString(GetNV("secret").empty() ? "Not Set" : "Set (hidden for security)") + "\n";
         sConfigText += "2FA Enabled: " + CString(m_bUse2FA ? "Yes" : "No") + "\n";
-        sConfigText += "LoC Enabled: " + CString(m_bEnableLoC ? "Yes" : "No") + "\n";
         sConfigText += "User Mode: " + m_sUserMode + "\n";
         PutModule(sConfigText);
     }
@@ -105,18 +98,6 @@ public:
         m_bUse2FA = false;
         SetNV("use2fa", "false");
         PutModule("2FA is now disabled.");
-    }
-
-    void EnableLoC() {
-        m_bEnableLoC = true;
-        SetNV("enableloc", "true");
-        PutModule("LoC is now enabled.");
-    }
-
-    void DisableLoC() {
-        m_bEnableLoC = false;
-        SetNV("enableloc", "false");
-        PutModule("LoC is now disabled.");
     }
 
     void SetUserMode(const CString& sLine) {
@@ -192,10 +173,6 @@ public:
     }
 
     EModRet OnIRCConnecting(CIRCSock* pIRCSock) override {
-        if (!m_bEnableLoC) {
-            return CONTINUE;
-        }
-
         CString sUsername = GetNV("username");
         CString sPassword = GetNV("password");
         CString sServerPassword = m_sUserMode + " " + sUsername + " " + sPassword;
