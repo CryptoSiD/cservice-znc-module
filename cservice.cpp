@@ -37,7 +37,7 @@ public:
         AddCommand("disable2fa", t_d(""), t_d("Disable 2FA/TOTP authentication"), [=](const CString&) {
             Disable2FA();
         });
-        AddCommand("setusermode", t_d("<mode>"), t_d("Define the user mode prefix (-x!, +x!, -!+x) used by LoC during server connection."), [=](const CString& sLine) {
+        AddCommand("setusermode", t_d("<mode>"), t_d("Define the user mode prefix (-x!, +x!, etc.) used by LoC during server connection."), [=](const CString& sLine) {
             SetUserMode(sLine);
         });
         AddCommand("showconfig", t_d(""), t_d("Show the current configuration settings"), [=](const CString&) {
@@ -58,51 +58,51 @@ public:
     void ShowConfig() {
         CString sConfigText = "Current Configuration:\n";
         sConfigText += "Username: " + GetNV("username") + "\n";
-        sConfigText += "Password: " + CString(GetNV("password").empty() ? "Not Set" : "Set (hidden for security)") + "\n";
-        sConfigText += "2FA Secret: " + CString(GetNV("secret").empty() ? "Not Set" : "Set (hidden for security)") + "\n";
+        sConfigText += "Password: " + CString("********") + "\n";
+        sConfigText += "2FA Secret: " + CString("********") + "\n";
         sConfigText += "2FA Enabled: " + CString(m_bUse2FA ? "Yes" : "No") + "\n";
         sConfigText += "User Mode: " + m_sUserMode + "\n";
-        PutModule(sConfigText);
+        PutModule(t_s(sConfigText));
     }
 
     void SetUsername(const CString& sLine) {
-        CString sUsername = sLine.Token(1, true).Trim_n();
+        CString sUsername = sLine.Token(1);
         SetNV("username", sUsername);
-        PutModule("Username set successfully.");
+        PutModule(t_s("Username set successfully."));
     }
 
     void SetPassword(const CString& sLine) {
-        CString sPassword = sLine.Token(1, true).Trim_n();
+        CString sPassword = sLine.Token(1);
         SetNV("password", sPassword);
-        PutModule("Password set successfully.");
+        PutModule(t_s("Password set successfully."));
     }
 
     void SetSecret(const CString& sLine) {
-        CString sSecret = sLine.Token(1, true).Trim_n();
+        CString sSecret = sLine.Token(1);
         SetNV("secret", sSecret);
-        PutModule("2FA secret key set successfully.");
+        PutModule(t_s("2FA secret key set successfully."));
     }
 
     void Enable2FA() {
         m_bUse2FA = true;
         SetNV("use2fa", "true");
-        PutModule("2FA is now enabled.");
+        PutModule(t_s("2FA is now enabled."));
     }
 
     void Disable2FA() {
         m_bUse2FA = false;
         SetNV("use2fa", "false");
-        PutModule("2FA is now disabled.");
+        PutModule(t_s("2FA is now disabled."));
     }
 
     void SetUserMode(const CString& sLine) {
-        CString sMode = sLine.Token(1, true).Trim_n();
+        CString sMode = sLine.Token(1);
         if (sMode == "-x!" || sMode == "+x!" || sMode == "-!+x" || sMode == "") {
             m_sUserMode = sMode;
             SetNV("usermode", m_sUserMode);
-            PutModule("User mode set to: " + m_sUserMode);
+            PutModule(t_s("User mode set to: ") + m_sUserMode);
         } else {
-            PutModule("Error: Invalid user mode. Allowed values are: -x!, +x!, -!+x.");
+            PutModule(t_s("Error: Invalid user mode. Allowed values are: -x!, +x!, -!+x."));
         }
     }
 
@@ -184,8 +184,5 @@ public:
         return CONTINUE;
     }
 };
-
-template<> void TModInfo<CService>(CModInfo& Info) {
-}
 
 NETWORKMODULEDEFS(CService, "Logs in to X on UnderNet with TOTP (2FA) and LoC support")
