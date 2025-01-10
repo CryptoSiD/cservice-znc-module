@@ -18,7 +18,7 @@ private:
 public:
     MODCONSTRUCTOR(CService) {
         m_bUse2FA = false;
-        m_sUserMode = ""; // Default user mode
+        m_sUserMode = "+x!"; // Default user mode
 
         AddHelpCommand(); // Add help command automatically
 
@@ -37,11 +37,7 @@ public:
         AddCommand("disable2fa", t_d(""), t_d("Disable 2FA/TOTP authentication"), [=](const CString&) {
             Disable2FA();
         });
-        AddCommand("setusermode", t_d("<mode>"), t_d("Define the user mode prefix (-x!, +x!, -!+x) used by LoC during server connection.
-
-Explanation:
-- !: Do not connect to the server if LoC fails (e.g., X is split from the network).
-- x: Set usermode +x to hide client hostname."), [=](const CString& sLine) {
+        AddCommand("setusermode", t_d("<mode>"), t_d("Define the user mode prefix (-x!, +x!, -!+x) used by LoC during server connection.\n\nExplanation:\n- !: Do not connect to the server if LoC fails (e.g., X is split from the network).\n- x: Set usermode +x to hide client hostname."), [=](const CString& sLine) {
             SetUserMode(sLine);
         });
         AddCommand("showconfig", t_d(""), t_d("Show the current configuration settings"), [=](const CString&) {
@@ -107,10 +103,11 @@ Explanation:
             SetNV("usermode", m_sUserMode);
             PutModule("User mode set to: " + m_sUserMode);
         } else {
-            PutModule("Error: Invalid user mode. Allowed values are: -x!, +x!, -!+x, .");
+            PutModule("Error: Invalid user mode. Allowed values are: -x!, +x!, -!+x.");
         }
     }
 
+    // Generate a Time-Based One-Time Password (TOTP) based on the secret key
     CString GenerateTOTP(const CString& sSecretKey) {
         CString sDecodedSecret = DecodeBase32(sSecretKey);
         uint64_t timeStep = std::time(nullptr) / 30;
@@ -172,6 +169,7 @@ Explanation:
         return CString(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     }
 
+    // Automatically handles IRC connection setup with LoC and TOTP if enabled
     EModRet OnIRCConnecting(CIRCSock* pIRCSock) override {
         CString sUsername = GetNV("username");
         CString sPassword = GetNV("password");
@@ -185,6 +183,7 @@ Explanation:
             }
         }
 
+        // Send server password with optional TOTP and user mode
         pIRCSock->SetPass(sServerPassword);
         return CONTINUE;
     }
@@ -194,4 +193,4 @@ template<> void TModInfo<CService>(CModInfo& Info) {
     // No wiki page reference
 }
 
-NETWORKMODULEDEFS(CService, "Logs in to X on UnderNet with 2FA/TOTP and LoC support")
+NETWORKMODULEDEFS(CService, "Logs in to X on UnderNet with TOTP (2FA) and LoC support")
