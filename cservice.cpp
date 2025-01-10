@@ -20,60 +20,50 @@ public:
     MODCONSTRUCTOR(CService) {
         m_bUse2FA = false;
         m_bEnableLoC = true; // Default to true
-        m_sUserMode = "-x!"; // Default user mode
+        m_sUserMode = ""; // Default user mode
+
+        AddHelpCommand(); // Add help command automatically
+
+        AddCommand("setusername", t_d("<username>"), t_d("Set your UnderNet username"), [=](const CString& sLine) {
+            SetUsername(sLine);
+        });
+        AddCommand("setpassword", t_d("<password>"), t_d("Set your UnderNet password"), [=](const CString& sLine) {
+            SetPassword(sLine);
+        });
+        AddCommand("setsecret", t_d("<secret>"), t_d("Set your 2FA secret key"), [=](const CString& sLine) {
+            SetSecret(sLine);
+        });
+        AddCommand("enable2fa", t_d(""), t_d("Enable 2FA authentication"), [=](const CString&) {
+            Enable2FA();
+        });
+        AddCommand("disable2fa", t_d(""), t_d("Disable 2FA authentication"), [=](const CString&) {
+            Disable2FA();
+        });
+        AddCommand("enableloc", t_d(""), t_d("Enable LoC authentication"), [=](const CString&) {
+            EnableLoC();
+        });
+        AddCommand("disableloc", t_d(""), t_d("Disable LoC authentication"), [=](const CString&) {
+            DisableLoC();
+        });
+        AddCommand("setusermode", t_d("<mode>"), t_d("Set the user mode prefix (-x!, +x!, -!+x)"), [=](const CString& sLine) {
+            SetUserMode(sLine);
+        });
+        AddCommand("showconfig", t_d(""), t_d("Show the current configuration settings"), [=](const CString&) {
+            ShowConfig();
+        });
     }
 
     bool OnLoad(const CString& sArgs, CString& sMessage) override {
         // Load the saved 2FA, LoC, and user mode settings from NV storage
         CString sUse2FA = GetNV("use2fa");
-        m_bUse2FA = sUse2FA.Equals("true");
+        m_bUse2FA = sUse2FA.ToBool();
         CString sEnableLoC = GetNV("enableloc");
-        m_bEnableLoC = sEnableLoC.Equals("true");
+        m_bEnableLoC = sEnableLoC.ToBool();
         CString sUserMode = GetNV("usermode");
         if (!sUserMode.empty()) {
             m_sUserMode = sUserMode;
         }
         return true; // Indicate successful loading
-    }
-
-    void OnModCommand(const CString& sCommand) override {
-        CString sAction = sCommand.Token(0).AsLower();
-        if (sAction == "help") {
-            ShowHelp();
-        } else if (sAction == "showconfig") {
-            ShowConfig();
-        } else if (sAction == "setusername") {
-            SetUsername(sCommand);
-        } else if (sAction == "setpassword") {
-            SetPassword(sCommand);
-        } else if (sAction == "setsecret") {
-            SetSecret(sCommand);
-        } else if (sAction == "enable2fa") {
-            Enable2FA();
-        } else if (sAction == "disable2fa") {
-            Disable2FA();
-        } else if (sAction == "enableloc") {
-            EnableLoC();
-        } else if (sAction == "disableloc") {
-            DisableLoC();
-        } else if (sAction == "setusermode") {
-            SetUserMode(sCommand);
-        }
-    }
-
-    void ShowHelp() {
-        CString sHelpText = "Available Commands:\n";
-        sHelpText += "setusername <username> - Set your UnderNet username.\n";
-        sHelpText += "setpassword <password> - Set your UnderNet password.\n";
-        sHelpText += "setsecret <secret> - Set your 2FA secret key.\n";
-        sHelpText += "enable2fa - Enable 2FA authentication.\n";
-        sHelpText += "disable2fa - Disable 2FA authentication.\n";
-        sHelpText += "enableloc - Enable LoC authentication.\n";
-        sHelpText += "disableloc - Disable LoC authentication.\n";
-        sHelpText += "setusermode <mode> - Set the user mode prefix (-x!, +x!, -!+x).\n";
-        sHelpText += "showconfig - Show the current configuration settings.\n";
-        sHelpText += "help - Show this help message.\n";
-        PutModule(sHelpText);
     }
 
     void ShowConfig() {
@@ -87,18 +77,21 @@ public:
         PutModule(sConfigText);
     }
 
-    void SetUsername(const CString& sCommand) {
-        SetNV("username", sCommand.Token(1, true));
+    void SetUsername(const CString& sLine) {
+        CString sUsername = sLine.Token(1, true).Trim_n();
+        SetNV("username", sUsername);
         PutModule("Username set successfully.");
     }
 
-    void SetPassword(const CString& sCommand) {
-        SetNV("password", sCommand.Token(1, true));
+    void SetPassword(const CString& sLine) {
+        CString sPassword = sLine.Token(1, true).Trim_n();
+        SetNV("password", sPassword);
         PutModule("Password set successfully.");
     }
 
-    void SetSecret(const CString& sCommand) {
-        SetNV("secret", sCommand.Token(1, true));
+    void SetSecret(const CString& sLine) {
+        CString sSecret = sLine.Token(1, true).Trim_n();
+        SetNV("secret", sSecret);
         PutModule("2FA secret key set successfully.");
     }
 
@@ -126,14 +119,14 @@ public:
         PutModule("LoC is now disabled.");
     }
 
-    void SetUserMode(const CString& sCommand) {
-        CString sMode = sCommand.Token(1, true);
-        if (sMode == "-x!" || sMode == "+x!" || sMode == "-!+x") {
+    void SetUserMode(const CString& sLine) {
+        CString sMode = sLine.Token(1, true).Trim_n();
+        if (sMode == "-x!" || sMode == "+x!" || sMode == "-!+x" || sMode == "") {
             m_sUserMode = sMode;
             SetNV("usermode", m_sUserMode);
             PutModule("User mode set to: " + m_sUserMode);
         } else {
-            PutModule("Error: Invalid user mode. Allowed values are: -x!, +x!, -!+x.");
+            PutModule("Error: Invalid user mode. Allowed values are: -x!, +x!, -!+x, .");
         }
     }
 
@@ -171,7 +164,7 @@ public:
 
         std::ostringstream oss;
         oss << std::setw(6) << std::setfill('0') << truncatedHash;
-        return CString(oss.str().c_str());
+        return CString(oss.str());
     }
 
     CString DecodeBase32(const CString& sEncoded) {
@@ -216,13 +209,12 @@ public:
         }
 
         pIRCSock->SetPass(sServerPassword);
-
         return CONTINUE;
     }
 };
 
 template<> void TModInfo<CService>(CModInfo& Info) {
-    Info.SetWikiPage("cservice");
+    // No wiki page reference
 }
 
-NETWORKMODULEDEFS(CService, "Logs in to X on UnderNet and supports 2FA, with reconnection handling")
+NETWORKMODULEDEFS(CService, "Logs in to X on UnderNet with 2FA/TOTP and LoC support")
