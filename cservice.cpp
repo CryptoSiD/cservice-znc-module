@@ -4,16 +4,24 @@
 #include <znc/Server.h>
 #include <znc/IRCSock.h>
 #include <openssl/hmac.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 #include <sstream>
 #include <iomanip>
 #include <vector>
 #include <map>
+#include <cstring>
+#include <fstream>
 
 class CService : public CModule {
 private:
     bool m_bUse2FA;
     CString m_sSecretKey;
     CString m_sUserMode;
+
+    // To generate a secure key, use the following OpenSSL command:
+    // openssl rand -hex 32
+    const std::string MASTER_KEY = "REPLACE_WITH_YOUR_OWN_SECURE_KEY";
 
 public:
     MODCONSTRUCTOR(CService) {
@@ -65,22 +73,94 @@ public:
         PutModule(sConfigText);
     }
 
-    void SetUsername(const CString& sLine) {
-        CString sUsername = sLine.Token(1);
-        SetNV("username", sUsername);
-        PutModule(t_s("Username set successfully."));
+    CString EncryptData(const CString& sData) {
+        unsigned char iv[16];
+        RAND_bytes(iv, sizeof(iv));
+
+        unsigned char ciphertext[1024];
+        int len = 0, ciphertextLen = 0;
+
+        EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+        EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr,
+                           reinterpret_cast<const unsigned char*>(MASTER_KEY.data()), iv);
+
+        EVP_EncryptUpdate(ctx, ciphertext, &len, reinterpret_cast<const unsigned char*>(sData.data()), sData.size());
+        ciphertextLen += len;
+
+        EVP_EncryptFinal_ex(ctx, ciphertext + ciphertextLen, &len);
+        ciphertextLen += len;
+
+        EVP_CIPHER_CTX_free(ctx);
+
+        CString result(reinterpret_cast<const char*>(iv), sizeof(iv));
+        result += CString(reinterpret_cast<const char*>(ciphertext), ciphertextLen);
+        return result;
+    }
+
+    CString DecryptData(const CString& sEncryptedData) {
+        unsigned char iv[16];
+        memcpy(iv, sEncryptedData.data(), sizeof(iv));
+
+        unsigned char ciphertext[1024];
+        int ciphertextLen = sEncryptedData.size() - sizeof(iv);
+        memcpy(ciphertext, sEncryptedData.data() + sizeof(iv), ciphertextLen);
+
+        unsigned char plaintext[1024];
+        int len = 0, plaintextLen = 0;
+
+        EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+        EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr,
+                           reinterpret_cast<const unsigned char*>(MASTER_KEY.data()), iv);
+
+        EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertextLen);
+        plaintextLen += len;
+
+        EVP_DecryptFinal_ex(ctx, plaintext + plaintextLen, &len);
+        plaintextLen += len;
+
+        EVP_CIPHER_CTX_free(ctx);
+
+        return CString(reinterpret_cast<const char*>(plaintext), plaintextLen);
     }
 
     void SetPassword(const CString& sLine) {
         CString sPassword = sLine.Token(1);
-        SetNV("password", sPassword);
-        PutModule(t_s("Password set successfully."));
+        CString encryptedPassword = EncryptData(sPassword);
+        SetNV("password", encryptedPassword);
+        PutModule(t_s("Password set successfully (encrypted)."));
     }
 
     void SetSecret(const CString& sLine) {
         CString sSecret = sLine.Token(1);
-        SetNV("secret", sSecret);
-        PutModule(t_s("2FA secret key set successfully."));
+        CString encryptedSecret = EncryptData(sSecret);
+        SetNV("secret", encryptedSecret);
+        PutModule(t_s("2FA secret key set successfully (encrypted)."));
+    }
+
+    EModRet OnIRCConnecting(CIRCSock* pIRCSock) override {
+        CString sUsername = GetNV("username");
+        CString sEncryptedPassword = GetNV("password");
+        CString sDecryptedPassword = DecryptData(sEncryptedPassword);
+
+        CString sServerPassword = m_sUserMode + " " + sUsername + " " + sDecryptedPassword;
+
+        if (m_bUse2FA) {
+            CString sEncryptedSecret = GetNV("secret");
+            CString sDecryptedSecret = DecryptData(sEncryptedSecret);
+            if (!sDecryptedSecret.empty()) {
+                CString sTOTP = GenerateTOTP(sDecryptedSecret);
+                sServerPassword += " " + sTOTP;
+            }
+        }
+
+        pIRCSock->SetPass(sServerPassword);
+        return CONTINUE;
+    }
+
+    void SetUsername(const CString& sLine) {
+        CString sUsername = sLine.Token(1);
+        SetNV("username", sUsername);
+        PutModule(t_s("Username set successfully."));
     }
 
     void Enable2FA() {
@@ -165,23 +245,6 @@ public:
         }
 
         return CString(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-    }
-
-    EModRet OnIRCConnecting(CIRCSock* pIRCSock) override {
-        CString sUsername = GetNV("username");
-        CString sPassword = GetNV("password");
-        CString sServerPassword = m_sUserMode + " " + sUsername + " " + sPassword;
-
-        if (m_bUse2FA) {
-            CString sSecretKey = GetNV("secret");
-            if (!sSecretKey.empty()) {
-                CString sTOTP = GenerateTOTP(sSecretKey);
-                sServerPassword += " " + sTOTP;
-            }
-        }
-
-        pIRCSock->SetPass(sServerPassword);
-        return CONTINUE;
     }
 };
 
