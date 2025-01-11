@@ -22,25 +22,25 @@ public:
 
         AddHelpCommand();
 
-        AddCommand("setusername", t_s("<username>"), t_s("Set your UnderNet username"), [=](const CString& sLine) {
+        AddCommand("setusername", t_d("<username>"), t_d("Set your UnderNet username"), [=](const CString& sLine) {
             SetUsername(sLine);
         });
-        AddCommand("setpassword", t_s("<password>"), t_s("Set your UnderNet password"), [=](const CString& sLine) {
+        AddCommand("setpassword", t_d("<password>"), t_d("Set your UnderNet password"), [=](const CString& sLine) {
             SetPassword(sLine);
         });
-        AddCommand("setsecret", t_s("<secret>"), t_s("Set your 2FA/TOTP secret key"), [=](const CString& sLine) {
+        AddCommand("setsecret", t_d("<secret>"), t_d("Set your 2FA/TOTP secret key"), [=](const CString& sLine) {
             SetSecret(sLine);
         });
-        AddCommand("enable2fa", t_s(""), t_s("Enable 2FA/TOTP authentication"), [=](const CString&) {
+        AddCommand("enable2fa", t_d(""), t_d("Enable 2FA/TOTP authentication"), [=](const CString&) {
             Enable2FA();
         });
-        AddCommand("disable2fa", t_s(""), t_s("Disable 2FA/TOTP authentication"), [=](const CString&) {
+        AddCommand("disable2fa", t_d(""), t_d("Disable 2FA/TOTP authentication"), [=](const CString&) {
             Disable2FA();
         });
-        AddCommand("setusermode", t_s("<mode>"), t_s("Define the user mode prefix (-x!, +x!, etc.) used by LoC during server connection."), [=](const CString& sLine) {
+        AddCommand("setusermode", t_d("<mode>"), t_d("Define the user mode prefix (-x!, +x!, etc.) used by LoC during server connection."), [=](const CString& sLine) {
             SetUserMode(sLine);
         });
-        AddCommand("showconfig", t_s(""), t_s("Show the current configuration settings"), [=](const CString&) {
+        AddCommand("showconfig", t_d(""), t_d("Show the current configuration settings"), [=](const CString&) {
             ShowConfig();
         });
     }
