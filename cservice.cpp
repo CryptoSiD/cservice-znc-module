@@ -37,7 +37,7 @@ public:
         AddCommand("disable2fa", t_d(""), t_d("Disable 2FA/TOTP authentication"), [=](const CString&) {
             Disable2FA();
         });
-        AddCommand("setusermode", t_d("<mode>"), t_d("Define the user mode prefix (-x!, +x!, etc.) used by LoC during server connection."), [=](const CString& sLine) {
+        AddCommand("setusermode", t_d("<mode>"), t_d("Define the user mode prefix (-x!, +x!, -!+x) used by LoC during server connection."), [=](const CString& sLine) {
             SetUserMode(sLine);
         });
         AddCommand("showconfig", t_d(""), t_d("Show the current configuration settings"), [=](const CString&) {
