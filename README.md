@@ -21,17 +21,26 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
    cd cservice-znc-module
    ```
 
-2. Build the module:
+2. Generate your `MASTER_KEY` for encrypting sensitive data (password and 2FA secret):
+   ```bash
+   openssl rand -hex 32
+   ```
+   Replace the placeholder `MASTER_KEY` in the module code with the generated key:
+   ```cpp
+   const std::string MASTER_KEY = "REPLACE_WITH_YOUR_OWN_SECURE_KEY";
+   ```
+
+3. Build the module:
    ```bash
    znc-buildmod cservice.cpp
    ```
 
-3. Place the compiled module in your ZNC modules directory:
+4. Place the compiled module in your ZNC modules directory:
    ```bash
    mv cservice.so ~/.znc/modules/
    ```
 
-4. Load the module in ZNC:
+5. Load the module in ZNC:
    ```text
    /znc loadmod cservice
    ```
