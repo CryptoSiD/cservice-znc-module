@@ -92,4 +92,4 @@ const std::string MASTER_KEY = "REPLACE_WITH_YOUR_OWN_SECURE_KEY";
 
 ---
 
-Enjoy secure and seamless logins with the `CService` ZNC module! For more information, visit [UnderNet](https://www.undernet.org).
+Enjoy secure and seamless logins with the `CService` ZNC module!
