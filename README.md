@@ -65,21 +65,21 @@ You can set:
 
 The CService website provides the 2FA secret key in eight groups separated by spaces, like this:
 ```
-aaaa bbbb cccc dddd eeee ffff gggg hhhh
+a1b2 c3d4 e5f6 g7h8 i9j0 k1l2 m3n4 o5p6
 ```
 Before entering the key into the module, you must:
 1. Remove all spaces.
 2. Convert all lowercase letters to uppercase.
 
-For example, if CService gives you `aaaa bbbb cccc dddd eeee ffff gggg hhhh`, you should enter it as:
+For example, if CService gives you `A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6`, you should enter it as:
 ```
-AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH
+A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6
 ```
 This ensures compatibility with the module.
 
 You can use the following Linux command to reformat the key automatically:
 ```bash
-echo "aaaa bbbb cccc dddd eeee ffff gggg hhhh" | tr -d ' ' | tr '[:lower:]' '[:upper:]'
+echo "a1b2 c3d4 e5f6 g7h8 i9j0 k1l2 m3n4 o5p6" | tr -d ' ' | tr '[:lower:]' '[:upper:]'
 ```
 
 ---
