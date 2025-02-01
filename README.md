@@ -71,7 +71,7 @@ Before entering the key into the module, you must:
 1. Remove all spaces.
 2. Convert all lowercase letters to uppercase.
 
-For example, if CService gives you `A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6`, you should enter it as:
+For example, if CService gives you `a1b2 c3d4 e5f6 g7h8 i9j0 k1l2 m3n4 o5p6`, you should enter it as:
 ```
 A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6
 ```
