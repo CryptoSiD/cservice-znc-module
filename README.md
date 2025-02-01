@@ -61,18 +61,21 @@ You can set:
 - Enable or disable 2FA.
 - Your preferred user mode (`-x!`, `+x!`, or `-!+x`).
 
-### CService 2FA Secret Key Format
+### Formatting the 2FA Secret Key
 
-The CService website provides the TOTP secret key in four sections with lowercase letters (e.g., `abcd-efgh-ijkl-mnop`). However, the `CService` ZNC module requires the secret key to be in **one continuous string** with **all uppercase letters**. Before entering the key into the module, manually adjust it by:
+The CService website provides the 2FA secret key in four groups separated by spaces, like this:
+```
+aaaa bbbb cccc dddd
+```
+Before entering the key into the module, you must:
+1. Remove all spaces.
+2. Convert all lowercase letters to uppercase.
 
-- Removing any dashes (`-`)
-- Converting all letters to uppercase
-
-**Example:**
-- CService-provided key: `abcd-efgh-ijkl-mnop`
-- Required format: `ABCDEFGHIJKLMNOP`
-
-Ensure you input the correctly formatted key when configuring 2FA in the module.
+For example, if CService gives you `aaaa bbbb cccc dddd`, you should enter it as:
+```
+AAAABBBBCCCCDDDD
+```
+This ensures compatibility with the module.
 
 ---
 
@@ -106,4 +109,3 @@ const std::string MASTER_KEY = "REPLACE_WITH_YOUR_OWN_SECURE_KEY";
 ---
 
 Enjoy secure and seamless logins with the `CService` ZNC module!
-
