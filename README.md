@@ -63,19 +63,24 @@ You can set:
 
 ### Formatting the 2FA Secret Key
 
-The CService website provides the 2FA secret key in four groups separated by spaces, like this:
+The CService website provides the 2FA secret key in eight groups separated by spaces, like this:
 ```
-aaaa bbbb cccc dddd
+aaaa bbbb cccc dddd eeee ffff gggg hhhh
 ```
 Before entering the key into the module, you must:
 1. Remove all spaces.
 2. Convert all lowercase letters to uppercase.
 
-For example, if CService gives you `aaaa bbbb cccc dddd`, you should enter it as:
+For example, if CService gives you `aaaa bbbb cccc dddd eeee ffff gggg hhhh`, you should enter it as:
 ```
-AAAABBBBCCCCDDDD
+AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH
 ```
 This ensures compatibility with the module.
+
+You can use the following Linux command to reformat the key automatically:
+```bash
+echo "aaaa bbbb cccc dddd eeee ffff gggg hhhh" | tr -d ' ' | tr '[:lower:]' '[:upper:]'
+```
 
 ---
 
@@ -109,3 +114,4 @@ const std::string MASTER_KEY = "REPLACE_WITH_YOUR_OWN_SECURE_KEY";
 ---
 
 Enjoy secure and seamless logins with the `CService` ZNC module!
+
