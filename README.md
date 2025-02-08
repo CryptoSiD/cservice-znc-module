@@ -109,7 +109,6 @@ const std::string MASTER_KEY = "REPLACE_WITH_YOUR_OWN_SECURE_KEY";
   ```text
   /znc unloadmod cservice
   /znc loadmod cservice
-
   ```
 
 ---
