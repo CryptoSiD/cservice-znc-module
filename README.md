@@ -11,6 +11,7 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
 3. **LoC (Login on Connect)**: Seamlessly log in to UnderNet using their LoC feature. Learn more: [UnderNet LoC](https://www.undernet.org/loc/).
 4. **Custom User Modes**: Set your preferred user mode prefix (`-x!`, `+x!`, or `-!+x`) during server connection.
 5. **Encrypted Credentials**: Protect your password and 2FA secret with AES-256 encryption, ensuring that sensitive data is stored securely.
+6. **Clear Configuration**: Delete all stored credentials and settings with the `clearconfig` command.
 
 ---
 
@@ -102,6 +103,15 @@ const std::string MASTER_KEY = "REPLACE_WITH_YOUR_OWN_SECURE_KEY";
 
 ---
 
+## Clear Configuration
+
+Use the `clearconfig` command to delete all stored data (username, password, 2FA secret, etc.) from the `.registry` file:
+```text
+/msg *cservice clearconfig
+```
+
+---
+
 ## Notes
 
 - **Security Warning**: Always keep your `MASTER_KEY` private. If the key is exposed, encrypted data can be compromised. If the `MASTER_KEY` is lost, the encrypted password and 2FA secret will no longer work, and you will have to reconfigure the module.
@@ -114,4 +124,3 @@ const std::string MASTER_KEY = "REPLACE_WITH_YOUR_OWN_SECURE_KEY";
 ---
 
 Enjoy secure and seamless logins with the `CService` ZNC module!
-
