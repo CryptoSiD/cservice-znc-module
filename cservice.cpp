@@ -51,6 +51,9 @@ public:
         AddCommand("showconfig", t_d(""), t_d("Show the current configuration settings"), [=](const CString&) {
             ShowConfig();
         });
+        AddCommand("clearconfig", t_d(""), t_d("Clear all stored configuration data"), [=](const CString&) {
+            clearconfig();
+        });
     }
 
     bool OnLoad(const CString& sArgs, CString& sMessage) override {
@@ -65,12 +68,27 @@ public:
 
     void ShowConfig() {
         CString sConfigText = t_s("Current Configuration:\n");
-        sConfigText += t_s("Username: ") + GetNV("username") + t_s("\n");
-        sConfigText += t_s("Password: ") + CString("********") + t_s("\n");
-        sConfigText += t_s("2FA Secret: ") + CString("********") + t_s("\n");
-        sConfigText += t_s("2FA Enabled: ") + (m_bUse2FA ? t_s("Yes") : t_s("No")) + t_s("\n");
-        sConfigText += t_s("User Mode: ") + m_sUserMode + t_s("\n");
+        CString sUsername = GetNV("username");
+        CString sPassword = GetNV("password");
+        CString sSecret = GetNV("secret");
+        CString sUse2FA = GetNV("use2fa");
+        CString sUserMode = GetNV("usermode");
+
+        sConfigText += t_s("Username: ") + (sUsername.empty() ? t_s("Not set") : sUsername) + t_s("\n");
+        sConfigText += t_s("Password: ") + (sPassword.empty() ? t_s("Not set") : CString("********")) + t_s("\n");
+        sConfigText += t_s("2FA Secret: ") + (sSecret.empty() ? t_s("Not set") : CString("********")) + t_s("\n");
+        sConfigText += t_s("2FA Enabled: ") + (sUse2FA.empty() ? t_s("Not set") : (sUse2FA.ToBool() ? t_s("Yes") : t_s("No"))) + t_s("\n");
+        sConfigText += t_s("User Mode: ") + (sUserMode.empty() ? t_s("Not set") : sUserMode) + t_s("\n");
         PutModule(sConfigText);
+    }
+
+    void clearconfig() {
+        DelNV("username");
+        DelNV("password");
+        DelNV("secret");
+        DelNV("use2fa");
+        DelNV("usermode");
+        PutModule(t_s("All configuration data has been cleared."));
     }
 
     CString EncryptData(const CString& sData) {
