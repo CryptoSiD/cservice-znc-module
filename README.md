@@ -104,11 +104,12 @@ const std::string MASTER_KEY = "REPLACE_WITH_YOUR_OWN_SECURE_KEY";
 
 ## Notes
 
-- **Security Warning**: Always keep your `MASTER_KEY` private. If the key is exposed, encrypted data can be compromised.
+- **Security Warning**: Always keep your `MASTER_KEY` private. If the key is exposed, encrypted data can be compromised. If the `MASTER_KEY` is lost, the encrypted password and 2FA secret will no longer work, and you will have to reconfigure the module.
 - For changes to take effect, reload the module after updating configuration or code:
   ```text
   /znc unloadmod cservice
   /znc loadmod cservice
+
   ```
 
 ---
