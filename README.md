@@ -56,11 +56,41 @@ After loading the module, run the following command for help and configuration o
 /msg *cservice help
 ```
 
-You can set:
-- Your UnderNet username and password.
-- Your 2FA secret for TOTP.
-- Enable or disable 2FA.
-- Your preferred user mode (`-x!`, `+x!`, or `-!+x`).
+### Commands
+
+- **`setusername <username>`**  
+  Set your UnderNet username.  
+  Example: `/msg *cservice setusername myusername`
+
+- **`setpassword <password>`**  
+  Set your UnderNet password (stored encrypted).  
+  Example: `/msg *cservice setpassword mypassword`
+
+- **`setsecret <secret>`**  
+  Set your 2FA/TOTP secret key (stored encrypted). Ensure the secret is formatted correctly (uppercase with no spaces).  
+  Example: `/msg *cservice setsecret A1B2C3D4E5F6G7H8`
+
+- **`enable2fa`**  
+  Enable 2FA/TOTP authentication.  
+  Example: `/msg *cservice enable2fa`
+
+- **`disable2fa`**  
+  Disable 2FA/TOTP authentication.  
+  Example: `/msg *cservice disable2fa`
+
+- **`setusermode <mode>`**  
+  Define the user mode prefix (`-x!`, `+x!`, or `-!+x`) used by LoC during server connection.  
+  Example: `/msg *cservice setusermode +x!`
+
+- **`showconfig`**  
+  Show the current configuration settings (username, 2FA status, user mode, etc.).  
+  Example: `/msg *cservice showconfig`
+
+- **`clearconfig`**  
+  Delete all stored configuration data (username, password, 2FA secret, etc.).  
+  Example: `/msg *cservice clearconfig`
+
+---
 
 ### Formatting the 2FA Secret Key
 
@@ -99,15 +129,6 @@ openssl rand -hex 32
 Replace the placeholder `MASTER_KEY` in the module code with the generated key:
 ```cpp
 const std::string MASTER_KEY = "REPLACE_WITH_YOUR_OWN_SECURE_KEY";
-```
-
----
-
-## Clear Configuration
-
-Use the `clearconfig` command to delete all stored data (username, password, 2FA secret, etc.) from the `.registry` file:
-```text
-/msg *cservice clearconfig
 ```
 
 ---
