@@ -142,11 +142,12 @@ const std::string MASTER_KEY_HEX = "REPLACE_WITH_YOUR_64_CHAR_HEX";
 - **Security Warning**: Keep `MASTER_KEY_HEX` private. Changing it requires full reconfiguration.
 
 - To apply changes:
-  ```text
   /znc unloadmod cservice
   /znc loadmod cservice
-  ```
+
+## See Also
+* [UnderNet LoC Documentation](https://www.undernet.org/loc/)
 
 ---
 
-Enjoy secure and seamless logins with the `CService` ZNC module!
+Enjoy secure and seamless logins with the CService ZNC module!
