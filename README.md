@@ -1,6 +1,6 @@
 # CService ZNC Module
 
-The `CService` ZNC module provides secure login functionality for X on UnderNet, including support for 2FA/TOTP authentication and LoC (Login on Connect). It allows users to configure login details, enable/disable 2FA, and specify user modes. Sensitive data, such as passwords and 2FA secrets, are encrypted using AES-256-CBC encryption for enhanced security.
+The `CService` ZNC module provides secure login functionality for X on UnderNet, including support for 2FA/TOTP authentication and LoC (Login on Connect). It allows users to configure login details, enable/disable 2FA, and specify user modes. Sensitive data, such as passwords and 2FA secrets, are encrypted using AES-256-CBC encryption (v2.0+ upgrade) for enhanced security.
 
 ---
 
