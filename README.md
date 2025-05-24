@@ -19,7 +19,7 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-repository/cservice-znc-module.git
+   git clone https://github.com/CryptoSiD/cservice-znc-module.git
    cd cservice-znc-module
    ```
 
