@@ -10,7 +10,7 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
 2. **2FA/TOTP Support**: Enhance security by adding time-based one-time passwords to your login process.
 3. **LoC (Login on Connect)**: Seamlessly log in to UnderNet using their LoC feature. Learn more: [UnderNet LoC](https://www.undernet.org/loc/).
 4. **Custom User Modes**: Set your preferred user mode prefix (`-x!`, `+x!`, or `-!+x`) during server connection.
-5. **Encrypted Credentials**: Protect your password and 2FA secret with AES-256 encryption, ensuring that sensitive data is stored securely.
+5. **Encrypted Credentials**: Protect your password and 2FA secret with AES-256-CBC encryption (v2.0+ upgrade), ensuring sensitive data is stored securely.
 6. **Clear Configuration**: Delete all stored credentials and settings with the `clearconfig` command.
 
 ---
@@ -23,13 +23,13 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
    cd cservice-znc-module
    ```
 
-2. Generate your `MASTER_KEY` for encrypting sensitive data (password and 2FA secret):
+2. Generate your 64-character hex `MASTER_KEY_HEX` (v2.0+ requirement):
    ```bash
-   openssl rand -hex 32
+   openssl rand -hex 32  # Generates 64-character key
    ```
-   Replace the placeholder `MASTER_KEY` in the module code with the generated key:
+   Replace the placeholder in the module code:
    ```cpp
-   const std::string MASTER_KEY = "REPLACE_WITH_YOUR_OWN_SECURE_KEY";
+   const std::string MASTER_KEY_HEX = "REPLACE_WITH_YOUR_64_CHAR_HEX";
    ```
 
 3. Build the module:
@@ -117,26 +117,31 @@ echo "a1b2 c3d4 e5f6 g7h8 i9j0 k1l2 m3n4 o5p6" | tr -d ' ' | tr '[:lower:]' '[:u
 
 ## Password and 2FA Encryption
 
-This module encrypts sensitive data (password and 2FA secret) using AES-256 encryption. Each user must generate their own encryption key (referred to as `MASTER_KEY`) and update the module code before building it.
+This module encrypts sensitive data using AES-256-CBC encryption (v2.0+). Each user must generate their own 64-character hex key and update the module code before building it.
 
 ### Generating a Secure Encryption Key
 
-To generate a secure 256-bit (32-byte) hexadecimal key, use the following OpenSSL command:
+To generate a valid v2.0+ key:
 ```bash
-openssl rand -hex 32
+openssl rand -hex 32  # 64-character output
 ```
 
-Replace the placeholder `MASTER_KEY` in the module code with the generated key:
+Replace the placeholder in the code:
 ```cpp
-const std::string MASTER_KEY = "REPLACE_WITH_YOUR_OWN_SECURE_KEY";
+const std::string MASTER_KEY_HEX = "REPLACE_WITH_YOUR_64_CHAR_HEX";
 ```
 
 ---
 
 ## Notes
 
-- **Security Warning**: Always keep your `MASTER_KEY` private. If the key is exposed, encrypted data can be compromised. If the `MASTER_KEY` is lost, the encrypted password and 2FA secret will no longer work, and you will have to reconfigure the module.
-- For changes to take effect, reload the module after updating configuration or code:
+- **Version 2.0 Upgrade**: Existing configurations are incompatible. You must:
+  1. Run `/msg *cservice clearconfig`
+  2. Re-enter all credentials with the new encryption system
+
+- **Security Warning**: Keep `MASTER_KEY_HEX` private. Changing it requires full reconfiguration.
+
+- To apply changes:
   ```text
   /znc unloadmod cservice
   /znc loadmod cservice
