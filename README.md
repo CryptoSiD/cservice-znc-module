@@ -136,8 +136,11 @@ const std::string MASTER_KEY_HEX = "REPLACE_WITH_YOUR_64_CHAR_HEX";
 ## Notes
 
 - **Version 2.0 Upgrade**: Existing configurations are incompatible. You must:
-  1. Run `/msg *cservice clearconfig`
-  2. Re-enter all credentials with the new encryption system
+  <ol>
+    <li>Run <code>/msg *cservice clearconfig</code></li>
+    <li>Re-enter all credentials with the new encryption system</li>
+  </ol>
+
 
 - **Security Warning**: Keep `MASTER_KEY_HEX` private. Changing it requires full reconfiguration.
 
