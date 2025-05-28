@@ -68,13 +68,10 @@ public:
             t_d("Set your Base32 2FA secret"), 
             [=](const CString& sLine) { SetSecret(sLine); });
             
-        AddCommand("enable2fa", "", 
-            t_d("Enable 2FA authentication"), 
-            [=](const CString&) { Enable2FA(); });
-            
-        AddCommand("disable2fa", "", 
-            t_d("Disable 2FA authentication"), 
-            [=](const CString&) { Disable2FA(); });
+        // Unified 2FA command
+        AddCommand("2fa", t_d("on|off"), 
+            t_d("Enable or disable 2FA authentication"), 
+            [=](const CString& sLine) { Handle2FACommand(sLine); });
             
         AddCommand("setusermode", t_d("<mode>"), 
             t_d("Set user mode (-x!, +x!, -!+x)"), 
@@ -238,6 +235,18 @@ public:
             PutModule("2FA secret encrypted and stored");
         } catch (const std::exception& e) {
             PutModule("Error: " + CString(e.what()));
+        }
+    }
+
+    void Handle2FACommand(const CString& sLine) {
+        CString sAction = sLine.Token(1).AsLower();
+        
+        if (sAction == "on") {
+            Enable2FA();
+        } else if (sAction == "off") {
+            Disable2FA();
+        } else {
+            PutModule("Usage: 2fa <on|off>");
         }
     }
 
