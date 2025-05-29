@@ -18,43 +18,29 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
 ## Installation
 
 1. Clone the repository:
-   ```bash
    git clone https://github.com/CryptoSiD/cservice-znc-module.git
    cd cservice-znc-module
-   ```
 
 2. Generate your 64-character hex `MASTER_KEY_HEX` (v2.0+ requirement):
-   ```bash
    openssl rand -hex 32  # Generates 64-character key
-   ```
    Replace the placeholder in the module code:
-   ```cpp
    const std::string MASTER_KEY_HEX = "REPLACE_WITH_YOUR_64_CHAR_HEX";
-   ```
 
 3. Build the module:
-   ```bash
    znc-buildmod cservice.cpp
-   ```
 
 4. Place the compiled module in your ZNC modules directory:
-   ```bash
    mv cservice.so ~/.znc/modules/
-   ```
 
 5. Load the module in ZNC:
-   ```text
    /znc loadmod cservice
-   ```
 
 ---
 
 ## Configuration
 
 After loading the module, run the following command for help and configuration options:
-```text
 /msg *cservice help
-```
 
 ### Commands
 
@@ -70,13 +56,10 @@ After loading the module, run the following command for help and configuration o
   Set your 2FA/TOTP secret key (stored encrypted). Ensure the secret is formatted correctly (uppercase with no spaces).  
   Example: `/msg *cservice setsecret A1B2C3D4E5F6G7H8`
 
-- **`enable2fa`**  
-  Enable 2FA/TOTP authentication.  
-  Example: `/msg *cservice enable2fa`
-
-- **`disable2fa`**  
-  Disable 2FA/TOTP authentication.  
-  Example: `/msg *cservice disable2fa`
+- **`2fa on|off`**  
+  Enable or disable 2FA/TOTP authentication.  
+  Example: `/msg *cservice 2fa on`  
+  Example: `/msg *cservice 2fa off`
 
 - **`setusermode <mode>`**  
   Define the user mode prefix (`-x!`, `+x!`, or `-!+x`) used by LoC during server connection.  
@@ -95,23 +78,17 @@ After loading the module, run the following command for help and configuration o
 ### Formatting the 2FA Secret Key
 
 The CService website provides the 2FA secret key in eight groups separated by spaces, like this:
-```
 a1b2 c3d4 e5f6 g7h8 i9j0 k1l2 m3n4 o5p6
-```
 Before entering the key into the module, you must:
 1. Remove all spaces.
 2. Convert all lowercase letters to uppercase.
 
 For example, if CService gives you `a1b2 c3d4 e5f6 g7h8 i9j0 k1l2 m3n4 o5p6`, you should enter it as:
-```
 A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6
-```
 This ensures compatibility with the module.
 
 You can use the following Linux command to reformat the key automatically:
-```bash
 echo "a1b2 c3d4 e5f6 g7h8 i9j0 k1l2 m3n4 o5p6" | tr -d ' ' | tr '[:lower:]' '[:upper:]'
-```
 
 ---
 
@@ -122,14 +99,10 @@ This module encrypts sensitive data using AES-256-CBC encryption (v2.0+). Each u
 ### Generating a Secure Encryption Key
 
 To generate a valid v2.0+ key:
-```bash
 openssl rand -hex 32  # 64-character output
-```
 
 Replace the placeholder in the code:
-```cpp
 const std::string MASTER_KEY_HEX = "REPLACE_WITH_YOUR_64_CHAR_HEX";
-```
 
 ---
 
