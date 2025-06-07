@@ -18,29 +18,71 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
 ## Installation
 
 1. Clone the repository:
+   ```bash
    git clone https://github.com/CryptoSiD/cservice-znc-module.git
    cd cservice-znc-module
+   ```
 
-2. Generate your 64-character hex `MASTER_KEY_HEX` (v2.0+ requirement):
-   openssl rand -hex 32  # Generates 64-character key
-   Replace the placeholder in the module code:
-   const std::string MASTER_KEY_HEX = "REPLACE_WITH_YOUR_64_CHAR_HEX";
-
-3. Build the module:
+2. Build the module:
+   ```bash
    znc-buildmod cservice.cpp
+   ```
 
-4. Place the compiled module in your ZNC modules directory:
+3. Place the compiled module in your ZNC modules directory:
+   ```bash
    mv cservice.so ~/.znc/modules/
+   ```
 
-5. Load the module in ZNC:
+4. Load the module in ZNC:
+   ```
    /znc loadmod cservice
+   ```
+
+---
+
+## Master Key Configuration
+
+The module uses AES-256-CBC encryption to protect sensitive data and requires a 64-character hex master key stored in a file named `cservice.key`.
+
+### Key File Locations
+
+The module will search for the key file in the following locations (in order):
+- `~/.znc/users/[username]/moddata/cservice/cservice.key` (User's ZNC data directory)
+- `~/.znc/users/[username]/cservice.key` (User's config directory)  
+- `~/.znc/modules/cservice.key` (Default location)
+- `/etc/znc/cservice.key` (System-wide location)
+
+### Generating a Master Key
+
+You can generate a master key using one of these methods:
+
+**Method 1: Using the module command (recommended)**
+```
+/msg *cservice createkey
+```
+This will generate a new key file automatically in your ZNC data directory with proper permissions.
+
+**Method 2: Manual generation**
+```bash
+openssl rand -hex 32 > ~/.znc/modules/cservice.key
+chmod 600 ~/.znc/modules/cservice.key
+```
+
+### Security Notes
+
+- The key file should have restrictive permissions (600) - readable/writable by owner only
+- Keep your master key file secure and backed up
+- If you lose the key file, you'll need to reconfigure all credentials
+- Each user should have their own unique key file
 
 ---
 
 ## Configuration
 
 After loading the module, run the following command for help and configuration options:
+```
 /msg *cservice help
+```
 
 ### Commands
 
@@ -65,9 +107,17 @@ After loading the module, run the following command for help and configuration o
   Define the user mode prefix (`-x!`, `+x!`, or `-!+x`) used by LoC during server connection.  
   Example: `/msg *cservice setusermode +x!`
 
+- **`testtotp`**  
+  Generate and display the current TOTP code for testing purposes. This command shows the current 6-digit authentication code and how many seconds remain until it expires (codes refresh every 30 seconds). Useful for verifying your 2FA secret is configured correctly before enabling automatic authentication.  
+  Example: `/msg *cservice testtotp`
+
 - **`showconfig`**  
   Show the current configuration settings (username, 2FA status, user mode, etc.).  
   Example: `/msg *cservice showconfig`
+
+- **`createkey`**  
+  Generate a new random master key file in your ZNC data directory with proper permissions.  
+  Example: `/msg *cservice createkey`
 
 - **`clearconfig`**  
   Delete all stored configuration data (username, password, 2FA secret, etc.).  
@@ -78,31 +128,29 @@ After loading the module, run the following command for help and configuration o
 ### Formatting the 2FA Secret Key
 
 The CService website provides the 2FA secret key in eight groups separated by spaces, like this:
+```
 a1b2 c3d4 e5f6 g7h8 i9j0 k1l2 m3n4 o5p6
+```
 Before entering the key into the module, you must:
 1. Remove all spaces.
 2. Convert all lowercase letters to uppercase.
 
 For example, if CService gives you `a1b2 c3d4 e5f6 g7h8 i9j0 k1l2 m3n4 o5p6`, you should enter it as:
+```
 A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6
+```
 This ensures compatibility with the module.
 
 You can use the following Linux command to reformat the key automatically:
+```bash
 echo "a1b2 c3d4 e5f6 g7h8 i9j0 k1l2 m3n4 o5p6" | tr -d ' ' | tr '[:lower:]' '[:upper:]'
+```
 
 ---
 
 ## Password and 2FA Encryption
 
-This module encrypts sensitive data using AES-256-CBC encryption (v2.0+). Each user must generate their own 64-character hex key and update the module code before building it.
-
-### Generating a Secure Encryption Key
-
-To generate a valid v2.0+ key:
-openssl rand -hex 32  # 64-character output
-
-Replace the placeholder in the code:
-const std::string MASTER_KEY_HEX = "REPLACE_WITH_YOUR_64_CHAR_HEX";
+This module encrypts sensitive data using AES-256-CBC encryption (v2.0+). Each user must have their own master key file as described in the Master Key Configuration section above.
 
 ---
 
@@ -112,11 +160,13 @@ const std::string MASTER_KEY_HEX = "REPLACE_WITH_YOUR_64_CHAR_HEX";
   1. Run `/msg *cservice clearconfig`
   2. Re-enter all credentials with the new encryption system
 
-- **Security Warning**: Keep `MASTER_KEY_HEX` private. Changing it requires full reconfiguration.
+- **Security Warning**: Keep your `cservice.key` file private and secure. Changing or losing it requires full reconfiguration.
 
-- To apply changes:
-  1. /znc unloadmod cservice
-  2. /znc loadmod cservice
+- To apply changes after modifying the key file:
+  1. `/znc unloadmod cservice`
+  2. `/znc loadmod cservice`
+
+---
 
 ## See Also
 * [UnderNet LoC Documentation](https://www.undernet.org/loc/)
