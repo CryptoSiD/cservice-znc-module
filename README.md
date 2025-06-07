@@ -44,6 +44,15 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
 
 The module uses AES-256-CBC encryption to protect sensitive data and requires a 64-character hex master key stored in a file named `cservice.key`.
 
+### Important Change from Previous Versions
+
+**Previous versions** required you to modify the source code and replace a placeholder in the code:
+```cpp
+const std::string MASTER_KEY_HEX = "REPLACE_WITH_YOUR_64_CHAR_HEX";
+```
+
+**Current version** uses an external key file instead. This provides better security and eliminates the need to modify source code. The hardcoded `MASTER_KEY_HEX` variable has been removed entirely.
+
 ### Key File Locations
 
 The module will search for the key file in the following locations (in order):
@@ -159,6 +168,8 @@ This module encrypts sensitive data using AES-256-CBC encryption (v2.0+). Each u
 - **Version 2.0 Upgrade**: Existing configurations are incompatible. You must:
   1. Run `/msg *cservice clearconfig`
   2. Re-enter all credentials with the new encryption system
+
+- **Key File Migration**: If upgrading from a version that used hardcoded keys in the source code, you no longer need to modify the source. Simply generate a key file using the methods described above.
 
 - **Security Warning**: Keep your `cservice.key` file private and secure. Changing or losing it requires full reconfiguration.
 
