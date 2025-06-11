@@ -6,6 +6,7 @@
 #include <openssl/hmac.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
+#include <openssl/crypto.h>
 #include <sstream>
 #include <iomanip>
 #include <vector>
@@ -33,25 +34,13 @@ private:
     // Memory security functions - secure wiping of sensitive data from memory
     void SecureClearMemory(void* ptr, size_t size) {
         if (ptr && size > 0) {
-            volatile unsigned char* vptr = static_cast<volatile unsigned char*>(ptr);
-            // First pass: zero out
-            for (size_t i = 0; i < size; ++i) {
-                vptr[i] = 0;
-            }
-            // Second pass: fill with 0xFF
-            for (size_t i = 0; i < size; ++i) {
-                vptr[i] = 0xFF;
-            }
-            // Final pass: zero out again
-            for (size_t i = 0; i < size; ++i) {
-                vptr[i] = 0;
-            }
+            OPENSSL_cleanse(ptr, size);
         }
     }
 
     void SecureClearString(std::string& str) {
         if (!str.empty()) {
-            SecureClearMemory(&str[0], str.size());
+            OPENSSL_cleanse(&str[0], str.size());
             str.clear();
             str.shrink_to_fit(); // Force deallocation
         }
@@ -61,14 +50,14 @@ private:
         if (!str.empty()) {
             // CString internal data access may vary, so we clear what we can
             std::string temp = str.c_str();
-            SecureClearMemory(&temp[0], temp.size());
+            OPENSSL_cleanse(&temp[0], temp.size());
             str.clear();
         }
     }
 
     void SecureClearVector(std::vector<unsigned char>& vec) {
         if (!vec.empty()) {
-            SecureClearMemory(vec.data(), vec.size());
+            OPENSSL_cleanse(vec.data(), vec.size());
             vec.clear();
             vec.shrink_to_fit(); // Force deallocation
         }
