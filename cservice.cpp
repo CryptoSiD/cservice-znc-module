@@ -22,7 +22,6 @@ private:
     bool m_bUse2FA;
     CString m_sUserMode;
     std::vector<unsigned char> m_keyBytes;
-
     std::string m_sMasterKeyHex;
     
     // Constants for better maintainability
@@ -30,6 +29,50 @@ private:
     static constexpr int TOTP_DIGITS = 6;
     static constexpr size_t AES_KEY_SIZE = 32; // 256 bits
     static constexpr size_t MASTER_KEY_HEX_LENGTH = 64;
+
+    // Memory security functions - secure wiping of sensitive data from memory
+    void SecureClearMemory(void* ptr, size_t size) {
+        if (ptr && size > 0) {
+            volatile unsigned char* vptr = static_cast<volatile unsigned char*>(ptr);
+            // First pass: zero out
+            for (size_t i = 0; i < size; ++i) {
+                vptr[i] = 0;
+            }
+            // Second pass: fill with 0xFF
+            for (size_t i = 0; i < size; ++i) {
+                vptr[i] = 0xFF;
+            }
+            // Final pass: zero out again
+            for (size_t i = 0; i < size; ++i) {
+                vptr[i] = 0;
+            }
+        }
+    }
+
+    void SecureClearString(std::string& str) {
+        if (!str.empty()) {
+            SecureClearMemory(&str[0], str.size());
+            str.clear();
+            str.shrink_to_fit(); // Force deallocation
+        }
+    }
+
+    void SecureClearCString(CString& str) {
+        if (!str.empty()) {
+            // CString internal data access may vary, so we clear what we can
+            std::string temp = str.c_str();
+            SecureClearMemory(&temp[0], temp.size());
+            str.clear();
+        }
+    }
+
+    void SecureClearVector(std::vector<unsigned char>& vec) {
+        if (!vec.empty()) {
+            SecureClearMemory(vec.data(), vec.size());
+            vec.clear();
+            vec.shrink_to_fit(); // Force deallocation
+        }
+    }
 
     bool IsHexKeyValid(const std::string& key) const {
         if (key.length() != MASTER_KEY_HEX_LENGTH) return false;
@@ -64,12 +107,17 @@ private:
 
                 // Clean the key content (remove whitespace, newlines)
                 keyContent.Trim();
-                m_sMasterKeyHex = keyContent.c_str(); // Fixed: use c_str() instead of AsString()
+                m_sMasterKeyHex = keyContent.c_str();
+
+                // Securely wipe the temporary key content from memory
+                SecureClearCString(keyContent);
 
                 if (IsHexKeyValid(m_sMasterKeyHex)) {
                     return true;
                 } else {
                     sError = "Invalid key in file: " + path + " (must be 64 hex characters)";
+                    // Clear invalid key from memory
+                    SecureClearString(m_sMasterKeyHex);
                     continue;
                 }
             }
@@ -144,10 +192,12 @@ private:
         // Generate random IV
         std::vector<unsigned char> iv(EVP_CIPHER_iv_length(cipher));
         if (RAND_bytes(iv.data(), static_cast<int>(iv.size())) != 1) {
+            SecureClearVector(iv);
             throw std::runtime_error("IV generation failed");
         }
 
         if (EVP_EncryptInit_ex(ctx.get(), cipher, nullptr, m_keyBytes.data(), iv.data()) != 1) {
+            SecureClearVector(iv);
             throw std::runtime_error("Encryption init failed");
         }
 
@@ -159,11 +209,15 @@ private:
         if (EVP_EncryptUpdate(ctx.get(), ciphertext.data(), &out_len, 
             reinterpret_cast<const unsigned char*>(sData.data()), 
             static_cast<int>(sData.size())) != 1) {
+            SecureClearVector(iv);
+            SecureClearVector(ciphertext);
             throw std::runtime_error("Encryption failed");
         }
         total_len = out_len;
 
         if (EVP_EncryptFinal_ex(ctx.get(), ciphertext.data() + total_len, &out_len) != 1) {
+            SecureClearVector(iv);
+            SecureClearVector(ciphertext);
             throw std::runtime_error("Encryption finalization failed");
         }
         total_len += out_len;
@@ -171,6 +225,10 @@ private:
         // Combine IV + ciphertext
         CString result(reinterpret_cast<const char*>(iv.data()), iv.size());
         result.append(reinterpret_cast<const char*>(ciphertext.data()), total_len);
+        
+        // Securely clear sensitive data from memory
+        SecureClearVector(iv);
+        SecureClearVector(ciphertext);
         
         return result;
     }
@@ -193,6 +251,7 @@ private:
         );
 
         if (EVP_DecryptInit_ex(ctx.get(), cipher, nullptr, m_keyBytes.data(), iv.data()) != 1) {
+            SecureClearVector(iv);
             throw std::runtime_error("Decryption init failed");
         }
 
@@ -205,16 +264,26 @@ private:
 
         if (EVP_DecryptUpdate(ctx.get(), plaintext.data(), &out_len,
             reinterpret_cast<const unsigned char*>(ciphertext), ciphertext_len) != 1) {
+            SecureClearVector(iv);
+            SecureClearVector(plaintext);
             throw std::runtime_error("Decryption failed");
         }
         total_len = out_len;
 
         if (EVP_DecryptFinal_ex(ctx.get(), plaintext.data() + total_len, &out_len) != 1) {
+            SecureClearVector(iv);
+            SecureClearVector(plaintext);
             throw std::runtime_error("Decryption finalization failed - possibly corrupted data");
         }
         total_len += out_len;
 
-        return CString(reinterpret_cast<const char*>(plaintext.data()), total_len);
+        CString result(reinterpret_cast<const char*>(plaintext.data()), total_len);
+        
+        // Securely clear sensitive data from memory
+        SecureClearVector(iv);
+        SecureClearVector(plaintext);
+        
+        return result;
     }
 
     CString GenerateTOTP(const CString& sSecret) {
@@ -229,6 +298,7 @@ private:
 
         CString sDecodedSecret = DecodeBase32(sSecret);
         if (sDecodedSecret.empty()) {
+            SecureClearMemory(time_bytes, sizeof(time_bytes));
             throw std::runtime_error("Failed to decode Base32 secret");
         }
 
@@ -241,6 +311,10 @@ private:
                  sDecodedSecret.size(),
                  time_bytes, sizeof(time_bytes),
                  digest, &digest_len)) {
+            // Clear sensitive data before throwing
+            SecureClearCString(sDecodedSecret);
+            SecureClearMemory(digest, sizeof(digest));
+            SecureClearMemory(time_bytes, sizeof(time_bytes));
             throw std::runtime_error("HMAC generation failed");
         }
 
@@ -252,6 +326,11 @@ private:
                       | (digest[offset + 3] & 0xFF);
 
         code %= 1000000; // 10^6 for 6-digit TOTP
+        
+        // Securely clear sensitive data from memory
+        SecureClearCString(sDecodedSecret);
+        SecureClearMemory(digest, sizeof(digest));
+        SecureClearMemory(time_bytes, sizeof(time_bytes));
         
         std::ostringstream oss;
         oss << std::setw(TOTP_DIGITS) << std::setfill('0') << code;
@@ -294,6 +373,7 @@ private:
         for (char c : sClean) {
             auto it = char_map.find(c);
             if (it == char_map.end()) {
+                SecureClearVector(output);
                 throw std::runtime_error("Invalid Base32 character: " + std::string(1, c));
             }
 
@@ -306,7 +386,12 @@ private:
             }
         }
 
-        return CString(reinterpret_cast<const char*>(output.data()), output.size());
+        CString result(reinterpret_cast<const char*>(output.data()), output.size());
+        
+        // Securely clear the output buffer
+        SecureClearVector(output);
+        
+        return result;
     }
 
 public:
@@ -353,6 +438,13 @@ public:
             [=](const CString&) { TestTOTP(); });
     }
 
+    // Destructor to ensure memory cleanup
+    ~CService() {
+        // Clear all sensitive data from memory when module is destroyed
+        SecureClearString(m_sMasterKeyHex);
+        SecureClearVector(m_keyBytes);
+    }
+
     bool OnLoad(const CString& sArgs, CString& sMessage) override {
         // Load master key from file
         if (!LoadMasterKey(sMessage)) {
@@ -363,6 +455,9 @@ public:
             HexToBytes(m_sMasterKeyHex, m_keyBytes);
         } catch (const std::exception& e) {
             sMessage = "Failed to parse master key: " + CString(e.what());
+            // Clear sensitive data on failure
+            SecureClearString(m_sMasterKeyHex);
+            SecureClearVector(m_keyBytes);
             return false;
         }
         
@@ -413,7 +508,11 @@ public:
             CString encrypted = EncryptData(sPassword);
             SetNV("password", encrypted);
             PutModule("Password encrypted and stored successfully");
+            
+            // Clear the plaintext password from memory
+            SecureClearCString(sPassword);
         } catch (const std::exception& e) {
+            SecureClearCString(sPassword);
             PutModule("Error encrypting password: " + CString(e.what()));
         }
     }
@@ -426,7 +525,11 @@ public:
             CString encrypted = EncryptData(sSecret);
             SetNV("secret", encrypted);
             PutModule("2FA secret encrypted and stored successfully");
+            
+            // Clear the plaintext secret from memory
+            SecureClearCString(sSecret);
         } catch (const std::exception& e) {
+            SecureClearCString(sSecret);
             PutModule("Error: " + CString(e.what()));
         }
     }
@@ -455,6 +558,7 @@ public:
         try {
             CString decrypted = DecryptData(sSecret);
             GenerateTOTP(decrypted); // This will throw if secret is invalid
+            SecureClearCString(decrypted); // Clear the test decryption
         } catch (const std::exception& e) {
             PutModule("Error: Cannot enable 2FA - " + CString(e.what()));
             return;
@@ -510,6 +614,7 @@ public:
         // Generate 32 random bytes (256 bits)
         std::vector<unsigned char> keyBytes(32);
         if (RAND_bytes(keyBytes.data(), static_cast<int>(keyBytes.size())) != 1) {
+            SecureClearVector(keyBytes);
             PutModule("Error: Failed to generate random key");
             return;
         }
@@ -524,6 +629,8 @@ public:
         // Write to file
         CFile keyFile(keyPath);
         if (!keyFile.Open(O_WRONLY | O_CREAT | O_TRUNC, 0600)) {
+            SecureClearVector(keyBytes);
+            SecureClearString(hexKey);
             PutModule("Error: Cannot create key file at " + keyPath);
             return;
         }
@@ -531,10 +638,17 @@ public:
         if (!keyFile.Write(hexKey)) {
             PutModule("Error: Failed to write key to file");
             keyFile.Close();
+            SecureClearVector(keyBytes);
+            SecureClearString(hexKey);
             return;
         }
         
         keyFile.Close();
+        
+        // Clear sensitive data from memory
+        SecureClearVector(keyBytes);
+        SecureClearString(hexKey);
+        
         PutModule("Master key file created at: " + keyPath);
         PutModule("Key file permissions set to 600 (owner read/write only)");
         PutModule("Please restart ZNC or reload this module to use the new key");
@@ -555,6 +669,10 @@ public:
             
             CString sSecret = DecryptData(sEncSecret);
             CString code = GenerateTOTP(sSecret);
+            
+            // Securely clear the decrypted secret from memory
+            SecureClearCString(sSecret);
+            
             PutModule("Current TOTP code: " + code);
             PutModule("(This code is valid for ~" + 
                      CString(TOTP_TIME_STEP - (time(nullptr) % TOTP_TIME_STEP)) + 
@@ -591,6 +709,9 @@ public:
             if (m_bUse2FA) {
                 CString sEncSecret = GetNV("secret");
                 if (sEncSecret.empty()) {
+                    // Clear password from memory before error
+                    SecureClearCString(sPassword);
+                    SecureClearCString(sAuth);
                     PutModule("Error: 2FA enabled but no secret configured");
                     return CONTINUE;
                 }
@@ -599,9 +720,15 @@ public:
                 CString totpCode = GenerateTOTP(sSecret);
                 sAuth += " " + totpCode;
                 
+                // Clear the decrypted secret from memory
+                SecureClearCString(sSecret);
             }
 
             pIRCSock->SetPass(sAuth);
+            
+            // Securely clear sensitive data from memory
+            SecureClearCString(sPassword);
+            SecureClearCString(sAuth);
             
         } catch (const std::exception& e) {
             PutModule("Authentication failed: " + CString(e.what()));
