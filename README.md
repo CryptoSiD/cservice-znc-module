@@ -116,7 +116,7 @@ After loading the module, run the following command for help and configuration o
   Define the user mode prefix (`-x!`, `+x!`, or `-!+x`) used by LoC during server connection.  
   Example: `/msg *cservice setusermode +x!`
 
-  - **`setconnectpolicy on|off`**  
+- **`setconnectpolicy on|off`**  
   Configure whether to allow or block connections when authentication fails. When set to on, ZNC will continue connecting to the server even if authentication fails. When set to off (default), ZNC will block the connection if authentication fails.
   Example: `/msg *cservice setconnectpolicy on`
   Example: `/msg *cservice setconnectpolicy off`
