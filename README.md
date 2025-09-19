@@ -116,6 +116,11 @@ After loading the module, run the following command for help and configuration o
   Define the user mode prefix (`-x!`, `+x!`, or `-!+x`) used by LoC during server connection.  
   Example: `/msg *cservice setusermode +x!`
 
+  - **`setconnectpolicy on|off`**  
+  Configure whether to allow or block connections when authentication fails. When set to on, ZNC will continue connecting to the server even if authentication fails. When set to off (default), ZNC will block the connection if authentication fails.
+  Example: `/msg *cservice setconnectpolicy on`
+  Example: `/msg *cservice setconnectpolicy off`
+
 - **`testtotp`**  
   Generate and display the current TOTP code for testing purposes. This command shows the current 6-digit authentication code and how many seconds remain until it expires (codes refresh every 30 seconds). Useful for verifying your 2FA secret is configured correctly before enabling automatic authentication.  
   Example: `/msg *cservice testtotp`
