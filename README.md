@@ -11,7 +11,8 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
 3. **LoC (Login on Connect)**: Seamlessly log in to UnderNet using their LoC feature. Learn more: [UnderNet LoC](https://www.undernet.org/loc/).
 4. **Custom User Modes**: Set your preferred user mode prefix (`-x!`, `+x!`, or `-!+x`) during server connection.
 5. **Encrypted Credentials**: Protect your password and 2FA secret with AES-256-CBC encryption (v2.0+ upgrade), ensuring sensitive data is stored securely.
-6. **Clear Configuration**: Delete all stored credentials and settings with the `clearconfig` command.
+6. **Connection Policy Control**: Configure whether to allow or block connections when authentication fails.
+7. **Clear Configuration**: Delete all stored credentials and settings with the `clearconfig` command.
 
 ---
 
