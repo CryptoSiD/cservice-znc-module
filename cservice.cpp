@@ -21,6 +21,7 @@
 class CService : public CModule {
 private:
     bool m_bUse2FA;
+    bool m_bAllowConnectOnFail; // New setting for connection policy
     CString m_sUserMode;
     std::vector<unsigned char> m_keyBytes;
     std::string m_sMasterKeyHex;
@@ -30,6 +31,7 @@ private:
     static constexpr int TOTP_DIGITS = 6;
     static constexpr size_t AES_KEY_SIZE = 32; // 256 bits
     static constexpr size_t MASTER_KEY_HEX_LENGTH = 64;
+    static constexpr int TOTP_WINDOW = 1; // Check current, previous, and next time steps (±30 seconds)
 
     // Memory security functions - secure wiping of sensitive data from memory
     void SecureClearMemory(void* ptr, size_t size) {
@@ -112,10 +114,8 @@ private:
             }
         }
 
-        if (sError.empty()) {
-            sError = "Key file not found. Please create one of: " + keyPaths[0] + 
-                    ", " + keyPaths[1] + ", " + keyPaths[2] + ", or " + keyPaths[3];
-        }
+        // If no key file is found, allow module to load and prompt user to create one
+        sError = "Key file not found. Use 'createkey' command to generate one at: " + keyPaths[0];
         return false;
     }
 
@@ -123,12 +123,20 @@ private:
         bytes.clear();
         bytes.reserve(hex.size() / 2);
         
+        std::stringstream ss;
         for (size_t i = 0; i < hex.size(); i += 2) {
+            std::string byteStr = hex.substr(i, 2);
             try {
-                unsigned int byte = std::stoi(hex.substr(i, 2), nullptr, 16);
+                unsigned int byte;
+                ss.clear();
+                ss.str(byteStr);
+                ss >> std::hex >> byte;
+                if (ss.fail() || !ss.eof()) {
+                    throw std::runtime_error("Invalid hex string: " + byteStr);
+                }
                 bytes.push_back(static_cast<unsigned char>(byte));
             } catch (const std::exception& e) {
-                throw std::runtime_error("Invalid hex string: " + std::string(e.what()));
+                throw std::runtime_error("Invalid hex string: " + byteStr + " (" + e.what() + ")");
             }
         }
     }
@@ -175,6 +183,10 @@ private:
     CString EncryptData(const CString& sData) {
         if (sData.empty()) return "";
         
+        if (m_keyBytes.empty()) {
+            throw std::runtime_error("No master key loaded. Use 'createkey' to generate one.");
+        }
+
         CipherContext ctx;
         const EVP_CIPHER* cipher = EVP_aes_256_cbc();
         
@@ -225,6 +237,10 @@ private:
     CString DecryptData(const CString& sEncrypted) {
         if (sEncrypted.empty()) return "";
         
+        if (m_keyBytes.empty()) {
+            throw std::runtime_error("No master key loaded. Use 'createkey' to generate one.");
+        }
+
         CipherContext ctx;
         const EVP_CIPHER* cipher = EVP_aes_256_cbc();
         size_t iv_len = EVP_CIPHER_iv_length(cipher);
@@ -276,54 +292,69 @@ private:
     }
 
     CString GenerateTOTP(const CString& sSecret) {
-        uint64_t timestamp = static_cast<uint64_t>(time(nullptr)) / TOTP_TIME_STEP;
-        
-        // Convert timestamp to big-endian bytes
-        unsigned char time_bytes[8];
-        for (int i = 7; i >= 0; --i) {
-            time_bytes[i] = timestamp & 0xFF;
-            timestamp >>= 8;
-        }
-
         CString sDecodedSecret = DecodeBase32(sSecret);
         if (sDecodedSecret.empty()) {
-            SecureClearMemory(time_bytes, sizeof(time_bytes));
             throw std::runtime_error("Failed to decode Base32 secret");
         }
 
-        // Generate HMAC-SHA1
-        unsigned char digest[EVP_MAX_MD_SIZE];
-        unsigned int digest_len = 0;
-        
-        if (!HMAC(EVP_sha1(), 
-                 reinterpret_cast<const unsigned char*>(sDecodedSecret.data()), 
-                 sDecodedSecret.size(),
-                 time_bytes, sizeof(time_bytes),
-                 digest, &digest_len)) {
-            // Clear sensitive data before throwing
-            SecureClearCString(sDecodedSecret);
-            SecureClearMemory(digest, sizeof(digest));
-            SecureClearMemory(time_bytes, sizeof(time_bytes));
-            throw std::runtime_error("HMAC generation failed");
+        // Get current time and calculate time steps for current, previous, and next windows
+        uint64_t current_time = static_cast<uint64_t>(time(nullptr));
+        std::vector<uint64_t> time_steps;
+        for (int i = -TOTP_WINDOW; i <= TOTP_WINDOW; ++i) {
+            time_steps.push_back((current_time + i * TOTP_TIME_STEP) / TOTP_TIME_STEP);
         }
 
-        // Dynamic truncation
-        int offset = digest[digest_len - 1] & 0x0F;
-        uint32_t code = ((digest[offset] & 0x7F) << 24)
-                      | ((digest[offset + 1] & 0xFF) << 16)
-                      | ((digest[offset + 2] & 0xFF) << 8)
-                      | (digest[offset + 3] & 0xFF);
+        CString result;
+        for (size_t i = 0; i < time_steps.size(); ++i) {
+            uint64_t timestamp = time_steps[i];
+            // Convert timestamp to big-endian bytes
+            unsigned char time_bytes[8];
+            for (int j = 7; j >= 0; --j) {
+                time_bytes[j] = timestamp & 0xFF;
+                timestamp >>= 8;
+            }
 
-        code %= 1000000; // 10^6 for 6-digit TOTP
-        
-        // Securely clear sensitive data from memory
+            // Generate HMAC-SHA1
+            unsigned char digest[EVP_MAX_MD_SIZE];
+            unsigned int digest_len = 0;
+            
+            if (!HMAC(EVP_sha1(), 
+                     reinterpret_cast<const unsigned char*>(sDecodedSecret.data()), 
+                     sDecodedSecret.size(),
+                     time_bytes, sizeof(time_bytes),
+                     digest, &digest_len)) {
+                // Clear sensitive data before throwing
+                SecureClearCString(sDecodedSecret);
+                SecureClearMemory(digest, sizeof(digest));
+                SecureClearMemory(time_bytes, sizeof(time_bytes));
+                throw std::runtime_error("HMAC generation failed");
+            }
+
+            // Dynamic truncation
+            int offset = digest[digest_len - 1] & 0x0F;
+            uint32_t code = ((digest[offset] & 0x7F) << 24)
+                          | ((digest[offset + 1] & 0xFF) << 16)
+                          | ((digest[offset + 2] & 0xFF) << 8)
+                          | (digest[offset + 3] & 0xFF);
+
+            code %= 1000000; // 10^6 for 6-digit TOTP
+            
+            // Securely clear digest and time bytes
+            SecureClearMemory(digest, sizeof(digest));
+            SecureClearMemory(time_bytes, sizeof(time_bytes));
+
+            // Use the code from the current time step (i == TOTP_WINDOW, middle of the vector)
+            if (i == static_cast<size_t>(TOTP_WINDOW)) {
+                std::ostringstream oss;
+                oss << std::setw(TOTP_DIGITS) << std::setfill('0') << code;
+                result = oss.str();
+            }
+        }
+
+        // Securely clear the decoded secret
         SecureClearCString(sDecodedSecret);
-        SecureClearMemory(digest, sizeof(digest));
-        SecureClearMemory(time_bytes, sizeof(time_bytes));
         
-        std::ostringstream oss;
-        oss << std::setw(TOTP_DIGITS) << std::setfill('0') << code;
-        return oss.str();
+        return result;
     }
 
     CString DecodeBase32(const CString& sInput) {
@@ -386,6 +417,7 @@ private:
 public:
     MODCONSTRUCTOR(CService) {
         m_bUse2FA = false;
+        m_bAllowConnectOnFail = false; // Default to HALT on auth failure
         m_sUserMode = "+x!";
 
         AddHelpCommand();
@@ -409,6 +441,10 @@ public:
         AddCommand("setusermode", t_d("<mode>"), 
             t_d("Set user mode (-x!, +x!, -!+x)"), 
             [=](const CString& sLine) { SetUserMode(sLine); });
+            
+        AddCommand("setconnectpolicy", t_d("on|off"), 
+            t_d("Allow or disallow connection on auth failure"), 
+            [=](const CString& sLine) { SetConnectPolicy(sLine); });
             
         AddCommand("showconfig", "", 
             t_d("Show current configuration"), 
@@ -435,22 +471,24 @@ public:
     }
 
     bool OnLoad(const CString& sArgs, CString& sMessage) override {
-        // Load master key from file
+        // Load master key from file, but allow module to load if key is missing
         if (!LoadMasterKey(sMessage)) {
-            return false;
-        }
-        
-        try {
-            HexToBytes(m_sMasterKeyHex, m_keyBytes);
-        } catch (const std::exception& e) {
-            sMessage = "Failed to parse master key: " + CString(e.what());
-            // Clear sensitive data on failure
-            SecureClearString(m_sMasterKeyHex);
-            SecureClearVector(m_keyBytes);
-            return false;
+            PutModule(sMessage); // Inform user about missing key
+            // Continue loading the module
+        } else {
+            try {
+                HexToBytes(m_sMasterKeyHex, m_keyBytes);
+            } catch (const std::exception& e) {
+                sMessage = "Failed to parse master key: " + CString(e.what());
+                // Clear sensitive data on failure
+                SecureClearString(m_sMasterKeyHex);
+                SecureClearVector(m_keyBytes);
+                return false;
+            }
         }
         
         m_bUse2FA = GetNV("use2fa").ToBool();
+        m_bAllowConnectOnFail = GetNV("allowconnectonfail").ToBool();
         CString sSavedMode = GetNV("usermode");
         if (!sSavedMode.empty()) {
             m_sUserMode = sSavedMode;
@@ -583,6 +621,23 @@ public:
         }
     }
 
+    void SetConnectPolicy(const CString& sLine) {
+        CString sPolicy = sLine.Token(1).AsLower();
+        
+        if (sPolicy == "on") {
+            m_bAllowConnectOnFail = true;
+            SetNV("allowconnectonfail", "true");
+            PutModule("Connection policy set to: Allow connection on auth failure");
+        } else if (sPolicy == "off") {
+            m_bAllowConnectOnFail = false;
+            SetNV("allowconnectonfail", "false");
+            PutModule("Connection policy set to: Block connection on auth failure");
+        } else {
+            PutModule("Usage: setconnectpolicy <on|off>");
+            PutModule("Current policy: " + CString(m_bAllowConnectOnFail ? "Allow connection on auth failure" : "Block connection on auth failure"));
+        }
+    }
+
     void ShowConfig() {
         CString sUsername = GetNV("username");
         CString sPassword = GetNV("password");
@@ -594,6 +649,8 @@ public:
         PutModule("2FA Secret: " + (sSecret.empty() ? CString("Not set") : CString("Set (encrypted)")));
         PutModule("2FA Status: " + CString(m_bUse2FA ? "Enabled" : "Disabled"));
         PutModule("User Mode: " + m_sUserMode);
+        PutModule("Master Key: " + (m_keyBytes.empty() ? CString("Not loaded") : CString("Loaded")));
+        PutModule("Connect Policy: " + CString(m_bAllowConnectOnFail ? "Allow connection on auth failure" : "Block connection on auth failure"));
         PutModule("=============================");
     }
 
@@ -634,13 +691,21 @@ public:
         
         keyFile.Close();
         
+        // Load the new key
+        try {
+            m_sMasterKeyHex = hexKey;
+            HexToBytes(m_sMasterKeyHex, m_keyBytes);
+            PutModule("Master key file created and loaded at: " + keyPath);
+            PutModule("Key file permissions set to 600 (owner read/write only)");
+        } catch (const std::exception& e) {
+            PutModule("Error loading new key: " + CString(e.what()));
+            SecureClearString(m_sMasterKeyHex);
+            SecureClearVector(m_keyBytes);
+        }
+        
         // Clear sensitive data from memory
         SecureClearVector(keyBytes);
         SecureClearString(hexKey);
-        
-        PutModule("Master key file created at: " + keyPath);
-        PutModule("Key file permissions set to 600 (owner read/write only)");
-        PutModule("Please restart ZNC or reload this module to use the new key");
     }
 
     void TestTOTP() {
@@ -649,6 +714,11 @@ public:
             return;
         }
         
+        if (m_keyBytes.empty()) {
+            PutModule("Error: No master key loaded. Use 'createkey' to generate one.");
+            return;
+        }
+
         try {
             CString sEncSecret = GetNV("secret");
             if (sEncSecret.empty()) {
@@ -677,7 +747,9 @@ public:
         DelNV("secret");
         DelNV("use2fa");
         DelNV("usermode");
+        DelNV("allowconnectonfail");
         m_bUse2FA = false;
+        m_bAllowConnectOnFail = false;
         m_sUserMode = "+x!";
         PutModule("All configuration data cleared successfully");
     }
@@ -688,7 +760,12 @@ public:
         
         if (sUsername.empty() || sEncPassword.empty()) {
             PutModule("Error: Missing username or password configuration");
-            return CONTINUE;
+            return m_bAllowConnectOnFail ? CONTINUE : HALT;
+        }
+
+        if (m_keyBytes.empty()) {
+            PutModule("Error: No master key loaded. Use 'createkey' to generate one.");
+            return m_bAllowConnectOnFail ? CONTINUE : HALT;
         }
 
         try {
@@ -702,7 +779,7 @@ public:
                     SecureClearCString(sPassword);
                     SecureClearCString(sAuth);
                     PutModule("Error: 2FA enabled but no secret configured");
-                    return CONTINUE;
+                    return m_bAllowConnectOnFail ? CONTINUE : HALT;
                 }
                 
                 CString sSecret = DecryptData(sEncSecret);
@@ -721,6 +798,7 @@ public:
             
         } catch (const std::exception& e) {
             PutModule("Authentication failed: " + CString(e.what()));
+            return m_bAllowConnectOnFail ? CONTINUE : HALT;
         }
         
         return CONTINUE;
