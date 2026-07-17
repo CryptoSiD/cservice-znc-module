@@ -1,6 +1,6 @@
 # CService ZNC Module
 
-The `CService` ZNC module provides secure login functionality for X on UnderNet, including support for 2FA/TOTP authentication and LoC (Login on Connect). It allows users to configure login details, enable/disable 2FA, and specify user modes. Sensitive data, such as passwords and 2FA secrets, are encrypted using AES-256-CBC encryption (v2.0+ upgrade) for enhanced security.
+The `CService` ZNC module provides secure login functionality for X on UnderNet, including support for 2FA/TOTP authentication and LoC (Login on Connect). It allows users to configure login details, enable/disable 2FA, and specify user modes. Sensitive data, such as passwords and 2FA secrets, are encrypted using AES-256-GCM authenticated encryption (v2.1+) for enhanced security.
 
 ---
 
@@ -10,7 +10,7 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
 2. **2FA/TOTP Support**: Enhance security by adding time-based one-time passwords to your login process.
 3. **LoC (Login on Connect)**: Seamlessly log in to UnderNet using their LoC feature. Learn more: [UnderNet LoC](https://www.undernet.org/loc/).
 4. **Custom User Modes**: Set your preferred user mode prefix (`-x!`, `+x!`, or `-!+x`) during server connection.
-5. **Encrypted Credentials**: Protect your password and 2FA secret with AES-256-CBC encryption (v2.0+ upgrade), ensuring sensitive data is stored securely.
+5. **Encrypted Credentials**: Protect your password and 2FA secret with AES-256-GCM authenticated encryption (v2.1+), ensuring sensitive data is stored securely and tamper-evident.
 6. **Connection Policy Control**: Configure whether to allow or block connections when authentication fails.
 7. **Clear Configuration**: Delete all stored credentials and settings with the `clearconfig` command.
 
@@ -43,7 +43,7 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
 
 ## Master Key Configuration
 
-The module uses AES-256-CBC encryption to protect sensitive data and requires a 64-character hex master key stored in a file named `cservice.key`.
+The module uses AES-256-GCM authenticated encryption to protect sensitive data and requires a 64-character hex master key stored in a file named `cservice.key`.
 
 ### Important Change from Previous Versions
 
@@ -165,11 +165,15 @@ echo "a1b2 c3d4 e5f6 g7h8 i9j0 k1l2 m3n4 o5p6" | tr -d ' ' | tr '[:lower:]' '[:u
 
 ## Password and 2FA Encryption
 
-This module encrypts sensitive data using AES-256-CBC encryption (v2.0+). Each user must have their own master key file as described in the Master Key Configuration section above.
+This module encrypts sensitive data using AES-256-GCM authenticated encryption (v2.1+). Unlike CBC, GCM detects tampered or corrupted stored data instead of silently failing. Each user must have their own master key file as described in the Master Key Configuration section above.
 
 ---
 
 ## Notes
+
+- **Version 2.1 Upgrade (AES-256-GCM)**: The encryption scheme changed from AES-256-CBC to AES-256-GCM, which authenticates stored data instead of just encrypting it. The ciphertext layout changed, so existing encrypted password/2FA secret values are incompatible with the new version. Your `cservice.key` master key file does **not** need to be regenerated — only the stored credentials need to be re-entered:
+  1. Run `/msg *cservice setpassword <password>`
+  2. Run `/msg *cservice setsecret <secret>` (if using 2FA)
 
 - **Version 2.0 Upgrade**: Existing configurations are incompatible. You must:
   1. Run `/msg *cservice clearconfig`
