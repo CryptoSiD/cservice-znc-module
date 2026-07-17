@@ -1,6 +1,6 @@
 # CService ZNC Module
 
-The `CService` ZNC module provides secure login functionality for X on UnderNet, including support for 2FA/TOTP authentication and LoC (Login on Connect). It allows users to configure login details, enable/disable 2FA, and specify user modes. Sensitive data, such as passwords and 2FA secrets, are encrypted using AES-256-GCM authenticated encryption (v2.1+) for enhanced security.
+The `CService` ZNC module provides secure login functionality for X on UnderNet, including support for 2FA/TOTP authentication and LoC (Login on Connect). It allows users to configure login details, enable/disable 2FA, and specify user modes. Sensitive data, such as passwords and 2FA secrets, are encrypted using AES-256-GCM authenticated encryption (v2.2+) for enhanced security.
 
 ---
 
@@ -10,7 +10,7 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
 2. **2FA/TOTP Support**: Enhance security by adding time-based one-time passwords to your login process.
 3. **LoC (Login on Connect)**: Seamlessly log in to UnderNet using their LoC feature. Learn more: [UnderNet LoC](https://www.undernet.org/loc/).
 4. **Custom User Modes**: Set your preferred user mode prefix (`-x!`, `+x!`, or `-!+x`) during server connection.
-5. **Encrypted Credentials**: Protect your password and 2FA secret with AES-256-GCM authenticated encryption (v2.1+), ensuring sensitive data is stored securely and tamper-evident.
+5. **Encrypted Credentials**: Protect your password and 2FA secret with AES-256-GCM authenticated encryption (v2.2+), ensuring sensitive data is stored securely, tamper-evident, and bound to its field so one credential can't be swapped for another.
 6. **Connection Policy Control**: Configure whether to allow or block connections when authentication fails.
 7. **Clear Configuration**: Delete all stored credentials and settings with the `clearconfig` command.
 
@@ -134,6 +134,10 @@ After loading the module, run the following command for help and configuration o
   Generate a new random master key file in your ZNC data directory with proper permissions.  
   Example: `/msg *cservice createkey`
 
+- **`reloadkey`**  
+  Reload the master key file from disk without unloading the module. Use this after manually replacing or editing `cservice.key`. If the reload fails, the previously loaded key is kept unchanged.  
+  Example: `/msg *cservice reloadkey`
+
 - **`clearconfig`**  
   Delete all stored configuration data (username, password, 2FA secret, etc.).  
   Example: `/msg *cservice clearconfig`
@@ -165,11 +169,15 @@ echo "a1b2 c3d4 e5f6 g7h8 i9j0 k1l2 m3n4 o5p6" | tr -d ' ' | tr '[:lower:]' '[:u
 
 ## Password and 2FA Encryption
 
-This module encrypts sensitive data using AES-256-GCM authenticated encryption (v2.1+). Unlike CBC, GCM detects tampered or corrupted stored data instead of silently failing. Each user must have their own master key file as described in the Master Key Configuration section above.
+This module encrypts sensitive data using AES-256-GCM authenticated encryption (v2.2+). Unlike CBC, GCM detects tampered or corrupted stored data instead of silently failing. Each stored value also carries a format-version byte and is bound to its field (password vs. 2FA secret) via GCM's associated-data feature, so one credential's ciphertext can't be substituted for another's. Each user must have their own master key file as described in the Master Key Configuration section above.
 
 ---
 
 ## Notes
+
+- **Version 2.2 Upgrade (format hardening)**: Encrypted blobs now carry a format-version byte and are bound to their field (password vs. 2FA secret) via authenticated associated data, so one can't be substituted for the other. This changes the ciphertext layout, so password/2FA secret values encrypted under v2.1 are incompatible with this version. Your `cservice.key` master key file does **not** need to be regenerated — only the stored credentials need to be re-entered:
+  1. Run `/msg *cservice setpassword <password>`
+  2. Run `/msg *cservice setsecret <secret>` (if using 2FA)
 
 - **Version 2.1 Upgrade (AES-256-GCM)**: The encryption scheme changed from AES-256-CBC to AES-256-GCM, which authenticates stored data instead of just encrypting it. The ciphertext layout changed, so existing encrypted password/2FA secret values are incompatible with the new version. Your `cservice.key` master key file does **not** need to be regenerated — only the stored credentials need to be re-entered:
   1. Run `/msg *cservice setpassword <password>`
@@ -183,9 +191,7 @@ This module encrypts sensitive data using AES-256-GCM authenticated encryption (
 
 - **Security Warning**: Keep your `cservice.key` file private and secure. Changing or losing it requires full reconfiguration.
 
-- To apply changes after modifying the key file:
-  1. `/znc unloadmod cservice`
-  2. `/znc loadmod cservice`
+- To apply changes after modifying the key file, run `/msg *cservice reloadkey` — no need to unload/reload the module.
 
 ---
 

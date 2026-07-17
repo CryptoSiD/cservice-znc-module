@@ -51,6 +51,12 @@ private:
     static constexpr size_t AES_GCM_IV_LEN      = 12;   // 96-bit nonce (recommended for GCM)
     static constexpr size_t AES_GCM_TAG_LEN     = 16;   // 128-bit authentication tag
     static constexpr size_t MASTER_KEY_HEX_LEN  = 64;   // 32 bytes → 64 hex chars
+    static constexpr unsigned char ENCRYPTION_FORMAT_VERSION = 1;
+
+    // AAD tags bind a ciphertext to its field so a "password" blob can't be
+    // swapped in for a "secret" blob (or vice versa) and still decrypt.
+    static constexpr const char* AAD_PASSWORD = "password";
+    static constexpr const char* AAD_SECRET   = "secret";
 
     // BASE32_TABLE is defined at namespace scope above the class (thread-safe, constexpr)
 
@@ -109,7 +115,10 @@ private:
     // -------------------------------------------------------------------------
     // Key file loading
     // -------------------------------------------------------------------------
-    bool LoadMasterKey(CString& sError) {
+    // Loads into outKeyBytes rather than m_keyBytes directly, so callers
+    // (OnLoad, ReloadKey) can decide whether/when to commit a successful
+    // load — a failed reload never disturbs an already-loaded key.
+    bool LoadMasterKey(std::vector<unsigned char>& outKeyBytes, CString& sError) {
         std::vector<CString> keyPaths = {
             GetSavePath() + "/cservice.key",
             GetUser()->GetUserPath() + "/cservice.key",
@@ -142,14 +151,14 @@ private:
             }
 
             try {
-                HexToBytes(hexKey, m_keyBytes);
+                HexToBytes(hexKey, outKeyBytes);
             } catch (...) {
                 SecureClear(hexKey);
-                SecureClear(m_keyBytes);
+                SecureClear(outKeyBytes);
                 continue;
             }
 
-            // Wipe hex key from memory immediately — m_keyBytes is all we need
+            // Wipe hex key from memory immediately — outKeyBytes is all we need
             SecureClear(hexKey);
             return true;
         }
@@ -174,11 +183,13 @@ private:
 
     // -------------------------------------------------------------------------
     // AES-256-GCM Encrypt
-    // Layout: [12-byte nonce] [ciphertext] [16-byte auth tag]
-    // Not compatible with AES-256-CBC blobs from earlier versions — re-run
+    // Layout: [1-byte format version] [12-byte nonce] [ciphertext] [16-byte auth tag]
+    // sAad binds the ciphertext to its field (AAD_PASSWORD/AAD_SECRET) so one
+    // field's blob can't be substituted for another's and still decrypt.
+    // Not compatible with blobs from earlier versions — re-run
     // 'setpassword'/'setsecret' after upgrading.
     // -------------------------------------------------------------------------
-    CString EncryptData(const CString& sData) {
+    CString EncryptData(const CString& sData, const CString& sAad) {
         if (sData.empty()) return "";
         if (m_keyBytes.empty())
             throw std::runtime_error("No master key loaded. Use 'createkey' to generate one.");
@@ -199,6 +210,14 @@ private:
         if (EVP_EncryptInit_ex(ctx.get(), nullptr, nullptr,
                                m_keyBytes.data(), iv.data()) != 1)
             throw std::runtime_error("GCM encrypt key/nonce init failed");
+
+        int aad_out_len = 0;
+        if (EVP_EncryptUpdate(ctx.get(), nullptr, &aad_out_len,
+                              reinterpret_cast<const unsigned char*>(sAad.data()),
+                              static_cast<int>(sAad.size())) != 1) {
+            SecureClear(iv);
+            throw std::runtime_error("GCM AAD encrypt failed");
+        }
 
         std::vector<unsigned char> ciphertext(sData.size());
         int out_len = 0, total_len = 0;
@@ -228,8 +247,10 @@ private:
             throw std::runtime_error("GCM get tag failed");
         }
 
-        // Pack: nonce + ciphertext + tag
-        CString result(reinterpret_cast<const char*>(iv.data()), iv.size());
+        // Pack: version + nonce + ciphertext + tag
+        CString result;
+        result.push_back(static_cast<char>(ENCRYPTION_FORMAT_VERSION));
+        result.append(reinterpret_cast<const char*>(iv.data()), iv.size());
         result.append(reinterpret_cast<const char*>(ciphertext.data()), total_len);
         result.append(reinterpret_cast<const char*>(tag.data()), tag.size());
 
@@ -241,22 +262,27 @@ private:
 
     // -------------------------------------------------------------------------
     // AES-256-GCM Decrypt — throws if the auth tag doesn't match (tampered
-    // or corrupted blob), unlike CBC's silent-garbage-on-padding-failure.
+    // or corrupted blob, or an sAad that doesn't match what it was encrypted
+    // with), unlike CBC's silent-garbage-on-padding-failure.
     // -------------------------------------------------------------------------
-    CString DecryptData(const CString& sEncrypted) {
+    CString DecryptData(const CString& sEncrypted, const CString& sAad) {
         if (sEncrypted.empty()) return "";
         if (m_keyBytes.empty())
             throw std::runtime_error("No master key loaded. Use 'createkey' to generate one.");
 
-        if (sEncrypted.size() < AES_GCM_IV_LEN + AES_GCM_TAG_LEN)
+        if (sEncrypted.size() < 1 + AES_GCM_IV_LEN + AES_GCM_TAG_LEN)
             throw std::runtime_error("Invalid encrypted data: too short");
 
         const unsigned char* raw = reinterpret_cast<const unsigned char*>(sEncrypted.data());
 
-        std::vector<unsigned char> iv(raw, raw + AES_GCM_IV_LEN);
-        const unsigned char* ciphertext_ptr = raw + AES_GCM_IV_LEN;
-        int ciphertext_len = static_cast<int>(sEncrypted.size() - AES_GCM_IV_LEN - AES_GCM_TAG_LEN);
-        std::vector<unsigned char> tag(raw + AES_GCM_IV_LEN + ciphertext_len,
+        unsigned char version = raw[0];
+        if (version != ENCRYPTION_FORMAT_VERSION)
+            throw std::runtime_error("Unsupported encryption format version — re-run setpassword/setsecret");
+
+        std::vector<unsigned char> iv(raw + 1, raw + 1 + AES_GCM_IV_LEN);
+        const unsigned char* ciphertext_ptr = raw + 1 + AES_GCM_IV_LEN;
+        int ciphertext_len = static_cast<int>(sEncrypted.size() - 1 - AES_GCM_IV_LEN - AES_GCM_TAG_LEN);
+        std::vector<unsigned char> tag(raw + 1 + AES_GCM_IV_LEN + ciphertext_len,
                                         raw + sEncrypted.size());
 
         CipherCtx ctx;
@@ -278,6 +304,15 @@ private:
             SecureClear(iv);
             SecureClear(tag);
             throw std::runtime_error("GCM decrypt key/nonce init failed");
+        }
+
+        int aad_out_len = 0;
+        if (EVP_DecryptUpdate(ctx.get(), nullptr, &aad_out_len,
+                              reinterpret_cast<const unsigned char*>(sAad.data()),
+                              static_cast<int>(sAad.size())) != 1) {
+            SecureClear(iv);
+            SecureClear(tag);
+            throw std::runtime_error("GCM AAD decrypt failed");
         }
 
         std::vector<unsigned char> plaintext(ciphertext_len);
@@ -405,7 +440,7 @@ private:
     // OnIRCConnecting so the decrypt+generate+wipe sequence lives in one place.
     // -------------------------------------------------------------------------
     CString GetCurrentTOTP(const CString& sEncSecret) {
-        CString sSecret = DecryptData(sEncSecret);
+        CString sSecret = DecryptData(sEncSecret, AAD_SECRET);
         try {
             CString code = GenerateTOTP(sSecret);
             SecureClear(sSecret);
@@ -486,6 +521,10 @@ public:
             t_d("Generate a new random master key file"),
             [=](const CString&){ CreateKeyFile(); });
 
+        AddCommand("reloadkey", "",
+            t_d("Reload the master key file from disk without unloading the module"),
+            [=](const CString&){ ReloadKey(); });
+
         AddCommand("clearconfig", "",
             t_d("Clear all stored configuration"),
             [=](const CString&){ ClearConfig(); });
@@ -503,7 +542,7 @@ public:
     // OnLoad
     // -------------------------------------------------------------------------
     bool OnLoad(const CString& sArgs, CString& sMessage) override {
-        if (!LoadMasterKey(sMessage)) {
+        if (!LoadMasterKey(m_keyBytes, sMessage)) {
             PutModule("Warning: " + sMessage);
             // Allow module to load so the user can run 'createkey'
         }
@@ -546,7 +585,7 @@ public:
             PutModule("Error: Password contains invalid characters"); return;
         }
         try {
-            SetNV("password", EncryptData(sPassword));
+            SetNV("password", EncryptData(sPassword, AAD_PASSWORD));
             PutModule("Password encrypted (AES-256-GCM) and stored");
         } catch (const std::exception& e) {
             PutModule("Error encrypting password: " + CString(e.what()));
@@ -558,7 +597,7 @@ public:
         CString sSecret = sLine.Token(1, true).Trim_n();
         try {
             ValidateSecretKey(sSecret);
-            SetNV("secret", EncryptData(sSecret));
+            SetNV("secret", EncryptData(sSecret, AAD_SECRET));
             PutModule("2FA secret encrypted (AES-256-GCM) and stored");
         } catch (const std::exception& e) {
             PutModule("Error: " + CString(e.what()));
@@ -696,6 +735,19 @@ public:
         PutModule("Re-run 'setpassword' and 'setsecret' to re-encrypt with the new key.");
     }
 
+    void ReloadKey() {
+        std::vector<unsigned char> newKeyBytes;
+        CString sError;
+        if (!LoadMasterKey(newKeyBytes, sError)) {
+            PutModule("Error: " + sError);
+            PutModule("Keeping the previously loaded key (if any) — nothing changed.");
+            return;
+        }
+        SecureClear(m_keyBytes);
+        m_keyBytes = std::move(newKeyBytes);
+        PutModule("Master key reloaded from disk.");
+    }
+
     void TestTOTP() {
         if (m_keyBytes.empty()) { PutModule("Error: No master key loaded"); return; }
 
@@ -747,7 +799,7 @@ public:
 
         CString sPassword, sAuth;
         try {
-            sPassword = DecryptData(sEncPassword);
+            sPassword = DecryptData(sEncPassword, AAD_PASSWORD);
             sAuth     = m_sUserMode + " " + sUsername + " " + sPassword;
 
             if (m_bUse2FA) {
