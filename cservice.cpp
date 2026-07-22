@@ -630,10 +630,8 @@ public:
         PutModule("Two-factor authentication disabled");
     }
 
-    // UnderNet's X only actually implements the three named LoC presets —
-    // testing confirmed arbitrary x/! combinations (e.g. -x+!) are not
-    // honored server-side, despite the docs' "just like normal modes"
-    // wording, so only these three are accepted.
+    // LoC only documents these three mode strings — testing confirmed
+    // other x/! combinations (e.g. -x+!) aren't honored server-side.
     void SetUserMode(const CString& sLine) {
         static const std::set<CString> allowed = {"-x!", "+x!", "-!+x"};
         CString sMode = sLine.Token(1).Trim_n();

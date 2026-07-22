@@ -113,7 +113,7 @@ After loading the module, run the following command for help and configuration o
   Example: `/msg *cservice 2fa off`
 
 - **`setusermode <mode>`**  
-  Define the user mode prefix (`-x!`, `+x!`, or `-!+x`) used by LoC during server connection. Only these three combinations are actually honored by X — despite LoC's docs describing `x`/`!` as independent toggles, testing confirmed arbitrary combinations aren't supported server-side.  
+  Define the user mode prefix (`-x!`, `+x!`, or `-!+x`) used by LoC during server connection. These are the only three modes LoC documents, and testing confirmed other combinations aren't supported server-side.  
   Example: `/msg *cservice setusermode +x!`
 
 - **`testtotp`**  
