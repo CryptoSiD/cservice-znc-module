@@ -853,7 +853,7 @@ public:
             }
         }
 
-        CString sPassword, sAuth;
+        CString sPassword, sAuth, totpCode;
         try {
             sPassword = DecryptData(sEncPassword, AAD_PASSWORD);
             sAuth     = m_sUserMode + " " + sUsername + " " + sPassword;
@@ -866,7 +866,7 @@ public:
                     LogConnectAttempt("Error: 2FA enabled but no secret configured");
                     return m_bAllowConnectOnFail ? CONTINUE : HALT;
                 }
-                CString totpCode = GetCurrentTOTP(sEncSecret);
+                totpCode = GetCurrentTOTP(sEncSecret);
                 sAuth += " " + totpCode;
             }
 
@@ -876,19 +876,24 @@ public:
                 SetNV("lasttotpstep", CString(curTotpStep));
             }
 
-            LogConnectAttempt("OK: PASS sent (mode=" + m_sUserMode + ", user=" + sUsername +
-                               ", 2fa=" + CString(m_bUse2FA ? "yes" : "no") +
-                               (m_bUse2FA ? (", totpstep=" + CString(curTotpStep)) : CString("")) + ")");
+            // Password redacted (same length, as asterisks) — everything
+            // else shown verbatim so the exact wire format can be checked.
+            CString sRedacted = m_sUserMode + " " + sUsername + " " +
+                                 CString(sPassword.length(), '*') +
+                                 (m_bUse2FA ? " " + totpCode : CString(""));
+            LogConnectAttempt("OK: PASS \"" + sRedacted + "\" sent");
 
         } catch (const std::exception& e) {
             LogConnectAttempt("Authentication error: " + CString(e.what()));
             SecureClear(sPassword);
             SecureClear(sAuth);
+            SecureClear(totpCode);
             return m_bAllowConnectOnFail ? CONTINUE : HALT;
         }
 
         SecureClear(sPassword);
         SecureClear(sAuth);
+        SecureClear(totpCode);
         return CONTINUE;
     }
 };
