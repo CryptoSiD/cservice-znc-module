@@ -505,7 +505,7 @@ public:
             [=](const CString& sLine){ Handle2FACommand(sLine); });
 
         AddCommand("setusermode", t_d("<mode>"),
-            t_d("Toggle +x/-x (hide IP) and +!/-! (block on auth fail), e.g. -x+!"),
+            t_d("Set user mode (-x!, +x!, -!+x)"),
             [=](const CString& sLine){ SetUserMode(sLine); });
 
         AddCommand("showconfig", "",
@@ -630,43 +630,25 @@ public:
         PutModule("Two-factor authentication disabled");
     }
 
-    // LoC's own docs describe 'x' (hide IP) and '!' (block connect on auth
-    // failure) as independent toggles set with +/- "just as with normal
-    // user and channel modes" — so any combination (e.g. -x+!) is valid,
-    // not just the three preset examples the docs happen to name.
+    // UnderNet's X only actually implements the three named LoC presets —
+    // testing confirmed arbitrary x/! combinations (e.g. -x+!) are not
+    // honored server-side, despite the docs' "just like normal modes"
+    // wording, so only these three are accepted.
     void SetUserMode(const CString& sLine) {
+        static const std::set<CString> allowed = {"-x!", "+x!", "-!+x"};
         CString sMode = sLine.Token(1).Trim_n();
         if (sMode.empty()) {
             PutModule("Current user mode: " + m_sUserMode);
-            PutModule("Format: independently toggle +x/-x (hide IP) and +!/-! (block connection if X login fails)");
-            PutModule("Examples: +x+! -x-! -x+! +x-!");
+            PutModule("Available modes: -x!, +x!, -!+x");
             return;
         }
-
-        bool bHideIP = false, bBlockOnFail = false;
-        bool haveX = false, haveBang = false;
-        char sign = '\0';
-        for (char c : sMode) {
-            if (c == '+' || c == '-') { sign = c; continue; }
-            if (sign == '\0') {
-                PutModule("Error: Mode must start with + or -");
-                return;
-            }
-            if (c == 'x') { bHideIP = (sign == '+'); haveX = true; }
-            else if (c == '!') { bBlockOnFail = (sign == '+'); haveBang = true; }
-            else {
-                PutModule("Error: Invalid mode character '" + CString(c) + "' (only x and ! are allowed)");
-                return;
-            }
+        if (allowed.count(sMode)) {
+            m_sUserMode = sMode;
+            SetNV("usermode", m_sUserMode);
+            PutModule("User mode set to: " + m_sUserMode);
+        } else {
+            PutModule("Error: Invalid mode. Allowed: -x!, +x!, -!+x");
         }
-        if (!haveX || !haveBang) {
-            PutModule("Error: Mode must set both x and ! (e.g. -x+!)");
-            return;
-        }
-
-        m_sUserMode = CString(bHideIP ? "+x" : "-x") + (bBlockOnFail ? "+!" : "-!");
-        SetNV("usermode", m_sUserMode);
-        PutModule("User mode set to: " + m_sUserMode);
     }
 
     void ShowConfig() {

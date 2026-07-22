@@ -9,7 +9,7 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
 1. **Secure Login**: Authenticate securely with UnderNet using your username, password, and optional TOTP-based 2FA.
 2. **2FA/TOTP Support**: Enhance security by adding time-based one-time passwords to your login process.
 3. **LoC (Login on Connect)**: Seamlessly log in to UnderNet using their LoC feature. Learn more: [UnderNet LoC](https://www.undernet.org/loc/).
-4. **Custom User Modes**: Independently toggle `+x`/`-x` (hide IP) and `+!`/`-!` (block the connection if login to X fails) during server connection, per UnderNet's LoC spec — any combination is allowed, e.g. `+x+!`, `-x-!`, `-x+!`, `+x-!`.
+4. **Custom User Modes**: Set your preferred user mode prefix (`-x!`, `+x!`, or `-!+x`) during server connection.
 5. **Encrypted Credentials**: Protect your password and 2FA secret with AES-256-GCM authenticated encryption (v2.2+), ensuring sensitive data is stored securely, tamper-evident, and bound to its field so one credential can't be swapped for another.
 6. **Clear Configuration**: Delete all stored credentials and settings with the `clearconfig` command.
 
@@ -113,8 +113,8 @@ After loading the module, run the following command for help and configuration o
   Example: `/msg *cservice 2fa off`
 
 - **`setusermode <mode>`**  
-  Independently toggle `+x`/`-x` (hide IP) and `+!`/`-!` (block connection if X login fails) used by LoC during server connection. Any combination is valid.  
-  Example: `/msg *cservice setusermode -x+!`
+  Define the user mode prefix (`-x!`, `+x!`, or `-!+x`) used by LoC during server connection. Only these three combinations are actually honored by X — despite LoC's docs describing `x`/`!` as independent toggles, testing confirmed arbitrary combinations aren't supported server-side.  
+  Example: `/msg *cservice setusermode +x!`
 
 - **`testtotp`**  
   Generate and display the current TOTP code for testing purposes. This command shows the current 6-digit authentication code and how many seconds remain until it expires (codes refresh every 30 seconds). Useful for verifying your 2FA secret is configured correctly before enabling automatic authentication.  
