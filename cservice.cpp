@@ -811,7 +811,6 @@ public:
         DelNV("use2fa");
         DelNV("usermode");
         DelNV("allowconnectonfail");
-        DelNV("lasttotpstep");
         DelNV("lastconnectlog");
         m_bUse2FA             = false;
         m_bAllowConnectOnFail = false;
@@ -835,24 +834,6 @@ public:
             return m_bAllowConnectOnFail ? CONTINUE : HALT;
         }
 
-        // TOTP is purely time-based: two connect attempts in the same
-        // 30-second window produce the identical code. X rejects a
-        // repeated code (replay protection), which otherwise shows up as
-        // "connects to the server but never logs in to X" — most visibly
-        // on the very first attempt after a ZNC restart, reusing a code
-        // the prior process already sent. Persisted (not in-memory) so it
-        // survives the restart that triggers the collision in the first
-        // place.
-        uint64_t curTotpStep = 0;
-        if (m_bUse2FA) {
-            curTotpStep = static_cast<uint64_t>(time(nullptr)) / TOTP_TIME_STEP;
-            CString sLastStep = GetNV("lasttotpstep");
-            if (!sLastStep.empty() && strtoull(sLastStep.c_str(), nullptr, 10) == curTotpStep) {
-                LogConnectAttempt("Notice: This window's TOTP code was already sent — skipping this attempt so ZNC can retry with a fresh code shortly.");
-                return m_bAllowConnectOnFail ? CONTINUE : HALT;
-            }
-        }
-
         CString sPassword, sAuth, totpCode;
         try {
             sPassword = DecryptData(sEncPassword, AAD_PASSWORD);
@@ -871,10 +852,6 @@ public:
             }
 
             pIRCSock->SetPass(sAuth);
-
-            if (m_bUse2FA) {
-                SetNV("lasttotpstep", CString(curTotpStep));
-            }
 
             // Password redacted (same length, as asterisks) — everything
             // else shown verbatim so the exact wire format can be checked.
