@@ -11,8 +11,7 @@ The `CService` ZNC module provides secure login functionality for X on UnderNet,
 3. **LoC (Login on Connect)**: Seamlessly log in to UnderNet using their LoC feature. Learn more: [UnderNet LoC](https://www.undernet.org/loc/).
 4. **Custom User Modes**: Independently toggle `+x`/`-x` (hide IP) and `+!`/`-!` (block the connection if login to X fails) during server connection, per UnderNet's LoC spec — any combination is allowed, e.g. `+x+!`, `-x-!`, `-x+!`, `+x-!`.
 5. **Encrypted Credentials**: Protect your password and 2FA secret with AES-256-GCM authenticated encryption (v2.2+), ensuring sensitive data is stored securely, tamper-evident, and bound to its field so one credential can't be swapped for another.
-6. **Connection Policy Control**: Configure whether to allow or block connections when authentication fails.
-7. **Clear Configuration**: Delete all stored credentials and settings with the `clearconfig` command.
+6. **Clear Configuration**: Delete all stored credentials and settings with the `clearconfig` command.
 
 ---
 
@@ -116,11 +115,6 @@ After loading the module, run the following command for help and configuration o
 - **`setusermode <mode>`**  
   Independently toggle `+x`/`-x` (hide IP) and `+!`/`-!` (block connection if X login fails) used by LoC during server connection. Any combination is valid.  
   Example: `/msg *cservice setusermode -x+!`
-
-- **`setconnectpolicy on|off`**  
-  Configure whether to allow or block connections when authentication fails. When set to on, ZNC will continue connecting to the server even if authentication fails. When set to off (default), ZNC will block the connection if authentication fails.  
-  Example: `/msg *cservice setconnectpolicy on`  
-  Example: `/msg *cservice setconnectpolicy off`
 
 - **`testtotp`**  
   Generate and display the current TOTP code for testing purposes. This command shows the current 6-digit authentication code and how many seconds remain until it expires (codes refresh every 30 seconds). Useful for verifying your 2FA secret is configured correctly before enabling automatic authentication.  

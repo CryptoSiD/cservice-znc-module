@@ -38,7 +38,6 @@ static constexpr std::array<unsigned char, 256> BASE32_TABLE = MakeBase32Table()
 class CService : public CModule {
 private:
     bool m_bUse2FA;
-    bool m_bAllowConnectOnFail;
     CString m_sUserMode;
     std::vector<unsigned char> m_keyBytes;
     // NOTE: m_sMasterKeyHex is cleared immediately after HexToBytes in OnLoad/CreateKeyFile
@@ -453,17 +452,6 @@ private:
     }
 
     // -------------------------------------------------------------------------
-    // PutModule() during the boot-time connect attempt has no attached
-    // client to reach, so the message is simply lost. Persist it too, so
-    // 'showconfig' can reveal after the fact what actually happened on a
-    // connect attempt nobody was watching live.
-    // -------------------------------------------------------------------------
-    void LogConnectAttempt(const CString& sMsg) {
-        SetNV("lastconnectlog", CString(static_cast<uint64_t>(time(nullptr))) + " " + sMsg);
-        PutModule(sMsg);
-    }
-
-    // -------------------------------------------------------------------------
     // Reject bytes that could smuggle extra lines/fields into the raw
     // PASS line built for OnIRCConnecting (CR, LF, NUL).
     // -------------------------------------------------------------------------
@@ -496,7 +484,6 @@ private:
 public:
     MODCONSTRUCTOR(CService) {
         m_bUse2FA            = false;
-        m_bAllowConnectOnFail = false;
         m_sUserMode          = "+x!";
 
         AddHelpCommand();
@@ -520,10 +507,6 @@ public:
         AddCommand("setusermode", t_d("<mode>"),
             t_d("Toggle +x/-x (hide IP) and +!/-! (block on auth fail), e.g. -x+!"),
             [=](const CString& sLine){ SetUserMode(sLine); });
-
-        AddCommand("setconnectpolicy", t_d("on|off"),
-            t_d("Allow or block connection on auth failure"),
-            [=](const CString& sLine){ SetConnectPolicy(sLine); });
 
         AddCommand("showconfig", "",
             t_d("Show current configuration"),
@@ -562,7 +545,6 @@ public:
         // wipes the hex string before returning.
 
         m_bUse2FA             = GetNV("use2fa").ToBool();
-        m_bAllowConnectOnFail = GetNV("allowconnectonfail").ToBool();
         CString sSavedMode    = GetNV("usermode");
         if (!sSavedMode.empty()) m_sUserMode = sSavedMode;
 
@@ -687,23 +669,6 @@ public:
         PutModule("User mode set to: " + m_sUserMode);
     }
 
-    void SetConnectPolicy(const CString& sLine) {
-        CString sPolicy = sLine.Token(1).AsLower();
-        if (sPolicy == "on") {
-            m_bAllowConnectOnFail = true;
-            SetNV("allowconnectonfail", "true");
-            PutModule("Policy: allow connection on auth failure");
-        } else if (sPolicy == "off") {
-            m_bAllowConnectOnFail = false;
-            SetNV("allowconnectonfail", "false");
-            PutModule("Policy: block connection on auth failure");
-        } else {
-            PutModule("Usage: setconnectpolicy <on|off>");
-            PutModule("Current: " + CString(m_bAllowConnectOnFail
-                ? "Allow on failure" : "Block on failure"));
-        }
-    }
-
     void ShowConfig() {
         PutModule("=== CService Configuration ===");
         PutModule("Username      : " + (GetNV("username").empty()
@@ -715,10 +680,6 @@ public:
         PutModule("2FA Status    : " + CString(m_bUse2FA ? "Enabled" : "Disabled"));
         PutModule("User Mode     : " + m_sUserMode);
         PutModule("Master Key    : " + CString(m_keyBytes.empty() ? "Not loaded" : "Loaded"));
-        PutModule("Connect Policy: " + CString(m_bAllowConnectOnFail
-            ? "Allow on failure" : "Block on failure"));
-        CString sLastLog = GetNV("lastconnectlog");
-        PutModule("Last Connect  : " + CString(sLastLog.empty() ? "(none yet)" : sLastLog));
         PutModule("================================");
     }
 
@@ -810,10 +771,7 @@ public:
         DelNV("secret");
         DelNV("use2fa");
         DelNV("usermode");
-        DelNV("allowconnectonfail");
-        DelNV("lastconnectlog");
         m_bUse2FA             = false;
-        m_bAllowConnectOnFail = false;
         m_sUserMode           = "+x!";
         PutModule("All configuration cleared");
     }
@@ -826,12 +784,12 @@ public:
         CString sEncPassword = GetNV("password");
 
         if (sUsername.empty() || sEncPassword.empty()) {
-            LogConnectAttempt("Error: Missing username or password");
-            return m_bAllowConnectOnFail ? CONTINUE : HALT;
+            PutModule("Error: Missing username or password");
+            return HALT;
         }
         if (m_keyBytes.empty()) {
-            LogConnectAttempt("Error: No master key loaded");
-            return m_bAllowConnectOnFail ? CONTINUE : HALT;
+            PutModule("Error: No master key loaded");
+            return HALT;
         }
 
         CString sPassword, sAuth, totpCode;
@@ -844,8 +802,8 @@ public:
                 if (sEncSecret.empty()) {
                     SecureClear(sPassword);
                     SecureClear(sAuth);
-                    LogConnectAttempt("Error: 2FA enabled but no secret configured");
-                    return m_bAllowConnectOnFail ? CONTINUE : HALT;
+                    PutModule("Error: 2FA enabled but no secret configured");
+                    return HALT;
                 }
                 totpCode = GetCurrentTOTP(sEncSecret);
                 sAuth += " " + totpCode;
@@ -853,19 +811,12 @@ public:
 
             pIRCSock->SetPass(sAuth);
 
-            // Password redacted (same length, as asterisks) — everything
-            // else shown verbatim so the exact wire format can be checked.
-            CString sRedacted = m_sUserMode + " " + sUsername + " " +
-                                 CString(sPassword.length(), '*') +
-                                 (m_bUse2FA ? " " + totpCode : CString(""));
-            LogConnectAttempt("OK: PASS \"" + sRedacted + "\" sent");
-
         } catch (const std::exception& e) {
-            LogConnectAttempt("Authentication error: " + CString(e.what()));
+            PutModule("Authentication error: " + CString(e.what()));
             SecureClear(sPassword);
             SecureClear(sAuth);
             SecureClear(totpCode);
-            return m_bAllowConnectOnFail ? CONTINUE : HALT;
+            return HALT;
         }
 
         SecureClear(sPassword);
