@@ -14,6 +14,7 @@
 #include <set>
 #include <array>
 #include <cstring>
+#include <cstdlib>
 #include <algorithm>
 #include <stdexcept>
 #include <memory>
@@ -636,21 +637,43 @@ public:
         PutModule("Two-factor authentication disabled");
     }
 
+    // LoC's own docs describe 'x' (hide IP) and '!' (block connect on auth
+    // failure) as independent toggles set with +/- "just as with normal
+    // user and channel modes" — so any combination (e.g. -x+!) is valid,
+    // not just the three preset examples the docs happen to name.
     void SetUserMode(const CString& sLine) {
-        static const std::set<CString> allowed = {"-x!", "+x!", "-!+x"};
         CString sMode = sLine.Token(1).Trim_n();
         if (sMode.empty()) {
             PutModule("Current user mode: " + m_sUserMode);
-            PutModule("Available modes: -x!, +x!, -!+x");
+            PutModule("Format: independently toggle +x/-x (hide IP) and +!/-! (block connection if X login fails)");
+            PutModule("Examples: +x+! -x-! -x+! +x-!");
             return;
         }
-        if (allowed.count(sMode)) {
-            m_sUserMode = sMode;
-            SetNV("usermode", m_sUserMode);
-            PutModule("User mode set to: " + m_sUserMode);
-        } else {
-            PutModule("Error: Invalid mode. Allowed: -x!, +x!, -!+x");
+
+        bool bHideIP = false, bBlockOnFail = false;
+        bool haveX = false, haveBang = false;
+        char sign = '\0';
+        for (char c : sMode) {
+            if (c == '+' || c == '-') { sign = c; continue; }
+            if (sign == '\0') {
+                PutModule("Error: Mode must start with + or -");
+                return;
+            }
+            if (c == 'x') { bHideIP = (sign == '+'); haveX = true; }
+            else if (c == '!') { bBlockOnFail = (sign == '+'); haveBang = true; }
+            else {
+                PutModule("Error: Invalid mode character '" + CString(c) + "' (only x and ! are allowed)");
+                return;
+            }
         }
+        if (!haveX || !haveBang) {
+            PutModule("Error: Mode must set both x and ! (e.g. -x+!)");
+            return;
+        }
+
+        m_sUserMode = CString(bHideIP ? "+x" : "-x") + (bBlockOnFail ? "+!" : "-!");
+        SetNV("usermode", m_sUserMode);
+        PutModule("User mode set to: " + m_sUserMode);
     }
 
     void SetConnectPolicy(const CString& sLine) {
@@ -775,6 +798,7 @@ public:
         DelNV("use2fa");
         DelNV("usermode");
         DelNV("allowconnectonfail");
+        DelNV("lasttotpstep");
         m_bUse2FA             = false;
         m_bAllowConnectOnFail = false;
         m_sUserMode           = "+x!";
@@ -797,6 +821,24 @@ public:
             return m_bAllowConnectOnFail ? CONTINUE : HALT;
         }
 
+        // TOTP is purely time-based: two connect attempts in the same
+        // 30-second window produce the identical code. X rejects a
+        // repeated code (replay protection), which otherwise shows up as
+        // "connects to the server but never logs in to X" — most visibly
+        // on the very first attempt after a ZNC restart, reusing a code
+        // the prior process already sent. Persisted (not in-memory) so it
+        // survives the restart that triggers the collision in the first
+        // place.
+        uint64_t curTotpStep = 0;
+        if (m_bUse2FA) {
+            curTotpStep = static_cast<uint64_t>(time(nullptr)) / TOTP_TIME_STEP;
+            CString sLastStep = GetNV("lasttotpstep");
+            if (!sLastStep.empty() && strtoull(sLastStep.c_str(), nullptr, 10) == curTotpStep) {
+                PutModule("Notice: This window's TOTP code was already sent — skipping this attempt so ZNC can retry with a fresh code shortly.");
+                return m_bAllowConnectOnFail ? CONTINUE : HALT;
+            }
+        }
+
         CString sPassword, sAuth;
         try {
             sPassword = DecryptData(sEncPassword, AAD_PASSWORD);
@@ -815,6 +857,10 @@ public:
             }
 
             pIRCSock->SetPass(sAuth);
+
+            if (m_bUse2FA) {
+                SetNV("lasttotpstep", CString(curTotpStep));
+            }
 
         } catch (const std::exception& e) {
             PutModule("Authentication error: " + CString(e.what()));
