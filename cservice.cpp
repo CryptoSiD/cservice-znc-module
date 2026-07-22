@@ -453,6 +453,17 @@ private:
     }
 
     // -------------------------------------------------------------------------
+    // PutModule() during the boot-time connect attempt has no attached
+    // client to reach, so the message is simply lost. Persist it too, so
+    // 'showconfig' can reveal after the fact what actually happened on a
+    // connect attempt nobody was watching live.
+    // -------------------------------------------------------------------------
+    void LogConnectAttempt(const CString& sMsg) {
+        SetNV("lastconnectlog", CString(static_cast<uint64_t>(time(nullptr))) + " " + sMsg);
+        PutModule(sMsg);
+    }
+
+    // -------------------------------------------------------------------------
     // Reject bytes that could smuggle extra lines/fields into the raw
     // PASS line built for OnIRCConnecting (CR, LF, NUL).
     // -------------------------------------------------------------------------
@@ -507,7 +518,7 @@ public:
             [=](const CString& sLine){ Handle2FACommand(sLine); });
 
         AddCommand("setusermode", t_d("<mode>"),
-            t_d("Set user mode (-x!, +x!, -!+x)"),
+            t_d("Toggle +x/-x (hide IP) and +!/-! (block on auth fail), e.g. -x+!"),
             [=](const CString& sLine){ SetUserMode(sLine); });
 
         AddCommand("setconnectpolicy", t_d("on|off"),
@@ -706,6 +717,8 @@ public:
         PutModule("Master Key    : " + CString(m_keyBytes.empty() ? "Not loaded" : "Loaded"));
         PutModule("Connect Policy: " + CString(m_bAllowConnectOnFail
             ? "Allow on failure" : "Block on failure"));
+        CString sLastLog = GetNV("lastconnectlog");
+        PutModule("Last Connect  : " + CString(sLastLog.empty() ? "(none yet)" : sLastLog));
         PutModule("================================");
     }
 
@@ -799,6 +812,7 @@ public:
         DelNV("usermode");
         DelNV("allowconnectonfail");
         DelNV("lasttotpstep");
+        DelNV("lastconnectlog");
         m_bUse2FA             = false;
         m_bAllowConnectOnFail = false;
         m_sUserMode           = "+x!";
@@ -813,11 +827,11 @@ public:
         CString sEncPassword = GetNV("password");
 
         if (sUsername.empty() || sEncPassword.empty()) {
-            PutModule("Error: Missing username or password");
+            LogConnectAttempt("Error: Missing username or password");
             return m_bAllowConnectOnFail ? CONTINUE : HALT;
         }
         if (m_keyBytes.empty()) {
-            PutModule("Error: No master key loaded");
+            LogConnectAttempt("Error: No master key loaded");
             return m_bAllowConnectOnFail ? CONTINUE : HALT;
         }
 
@@ -834,7 +848,7 @@ public:
             curTotpStep = static_cast<uint64_t>(time(nullptr)) / TOTP_TIME_STEP;
             CString sLastStep = GetNV("lasttotpstep");
             if (!sLastStep.empty() && strtoull(sLastStep.c_str(), nullptr, 10) == curTotpStep) {
-                PutModule("Notice: This window's TOTP code was already sent — skipping this attempt so ZNC can retry with a fresh code shortly.");
+                LogConnectAttempt("Notice: This window's TOTP code was already sent — skipping this attempt so ZNC can retry with a fresh code shortly.");
                 return m_bAllowConnectOnFail ? CONTINUE : HALT;
             }
         }
@@ -849,7 +863,7 @@ public:
                 if (sEncSecret.empty()) {
                     SecureClear(sPassword);
                     SecureClear(sAuth);
-                    PutModule("Error: 2FA enabled but no secret configured");
+                    LogConnectAttempt("Error: 2FA enabled but no secret configured");
                     return m_bAllowConnectOnFail ? CONTINUE : HALT;
                 }
                 CString totpCode = GetCurrentTOTP(sEncSecret);
@@ -862,8 +876,12 @@ public:
                 SetNV("lasttotpstep", CString(curTotpStep));
             }
 
+            LogConnectAttempt("OK: PASS sent (mode=" + m_sUserMode + ", user=" + sUsername +
+                               ", 2fa=" + CString(m_bUse2FA ? "yes" : "no") +
+                               (m_bUse2FA ? (", totpstep=" + CString(curTotpStep)) : CString("")) + ")");
+
         } catch (const std::exception& e) {
-            PutModule("Authentication error: " + CString(e.what()));
+            LogConnectAttempt("Authentication error: " + CString(e.what()));
             SecureClear(sPassword);
             SecureClear(sAuth);
             return m_bAllowConnectOnFail ? CONTINUE : HALT;
