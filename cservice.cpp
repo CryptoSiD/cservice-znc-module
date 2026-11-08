@@ -10,16 +10,15 @@
 #include <sstream>
 #include <iomanip>
 #include <vector>
-#include <map>
 #include <set>
 #include <array>
+#include <cctype>
+#include <cstdint>
 #include <cstring>
 #include <cstdlib>
+#include <ctime>
 #include <algorithm>
 #include <stdexcept>
-#include <memory>
-#include <cmath>
-#include <mutex>
 
 // -----------------------------------------------------------------------------
 // Compile-time Base32 lookup table — 0xFF marks invalid characters.
@@ -40,7 +39,6 @@ private:
     bool m_bUse2FA;
     CString m_sUserMode;
     std::vector<unsigned char> m_keyBytes;
-    // NOTE: m_sMasterKeyHex is cleared immediately after HexToBytes in OnLoad/CreateKeyFile
 
     // -------------------------------------------------------------------------
     // Constants
@@ -75,10 +73,10 @@ private:
         }
     }
 
-    // CString: cast data() to non-const — ZNC's CString wraps std::string internally.
+    // CString derives from std::string, so &s[0] gives a writable pointer.
     static void SecureClear(CString& s) {
         if (!s.empty()) {
-            OPENSSL_cleanse(const_cast<char*>(s.data()), s.size());
+            OPENSSL_cleanse(&s[0], s.size());
             s.clear();
         }
     }
@@ -365,7 +363,8 @@ private:
         std::vector<unsigned char> output;
         output.reserve((sClean.size() * 5) / 8);
 
-        int buffer = 0, bits_left = 0;
+        uint32_t buffer = 0;
+        int bits_left = 0;
         for (unsigned char c : sClean) {
             unsigned char val = BASE32_TABLE[c];
             if (val == 0xFF) {
@@ -377,6 +376,7 @@ private:
             if (bits_left >= 8) {
                 output.push_back(static_cast<unsigned char>((buffer >> (bits_left - 8)) & 0xFF));
                 bits_left -= 8;
+                buffer &= (1u << bits_left) - 1;   // keep only the unconsumed bits
             }
         }
 
@@ -490,43 +490,43 @@ public:
 
         AddCommand("setusername", t_d("<username>"),
             t_d("Set your UnderNet username"),
-            [=](const CString& sLine){ SetUsername(sLine); });
+            [this](const CString& sLine){ SetUsername(sLine); });
 
         AddCommand("setpassword", t_d("<password>"),
             t_d("Set your UnderNet password (encrypted at rest)"),
-            [=](const CString& sLine){ SetPassword(sLine); });
+            [this](const CString& sLine){ SetPassword(sLine); });
 
         AddCommand("setsecret", t_d("<secret>"),
             t_d("Set your Base32 2FA secret (encrypted at rest)"),
-            [=](const CString& sLine){ SetSecret(sLine); });
+            [this](const CString& sLine){ SetSecret(sLine); });
 
         AddCommand("2fa", t_d("on|off"),
             t_d("Enable or disable 2FA"),
-            [=](const CString& sLine){ Handle2FACommand(sLine); });
+            [this](const CString& sLine){ Handle2FACommand(sLine); });
 
         AddCommand("setusermode", t_d("<mode>"),
             t_d("Set user mode (-x!, +x!, -!+x)"),
-            [=](const CString& sLine){ SetUserMode(sLine); });
+            [this](const CString& sLine){ SetUserMode(sLine); });
 
         AddCommand("showconfig", "",
             t_d("Show current configuration"),
-            [=](const CString&){ ShowConfig(); });
+            [this](const CString&){ ShowConfig(); });
 
         AddCommand("createkey", "",
             t_d("Generate a new random master key file"),
-            [=](const CString&){ CreateKeyFile(); });
+            [this](const CString&){ CreateKeyFile(); });
 
         AddCommand("reloadkey", "",
             t_d("Reload the master key file from disk without unloading the module"),
-            [=](const CString&){ ReloadKey(); });
+            [this](const CString&){ ReloadKey(); });
 
         AddCommand("clearconfig", "",
             t_d("Clear all stored configuration"),
-            [=](const CString&){ ClearConfig(); });
+            [this](const CString&){ ClearConfig(); });
 
         AddCommand("testtotp", "",
             t_d("Display the current TOTP code"),
-            [=](const CString&){ TestTOTP(); });
+            [this](const CString&){ TestTOTP(); });
     }
 
     ~CService() {
@@ -541,8 +541,8 @@ public:
             PutModule("Warning: " + sMessage);
             // Allow module to load so the user can run 'createkey'
         }
-        // m_sMasterKeyHex never lingers — LoadMasterKey calls HexToBytes and
-        // wipes the hex string before returning.
+        // The hex form of the key never lingers — LoadMasterKey wipes it
+        // before returning.
 
         m_bUse2FA             = GetNV("use2fa").ToBool();
         CString sSavedMode    = GetNV("usermode");
